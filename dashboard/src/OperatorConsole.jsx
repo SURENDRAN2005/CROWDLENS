@@ -2,18 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 
 /* ========== ZONE METADATA ========== */
 const INITIAL_ZONES = [
-  { id: 'zone-a', name: 'Zone A', desc: 'Bridge Approach N', video: 'crowd10.mp4', status: 'RED',
-    area_m2: 120, capacity: 200, location: 'Northern bridge entry ramp, narrow corridor' },
-  { id: 'zone-b', name: 'Zone B', desc: 'Central Deck', video: 'crowd5.mp4', status: 'BLACK',
-    area_m2: 500, capacity: 800, location: 'Main open-air deck, center of venue' },
-  { id: 'zone-c', name: 'Zone C', desc: 'North Exit Gate', video: 'crowd1.mp4', status: 'ORANGE',
-    area_m2: 80, capacity: 150, location: 'Bottleneck exit gate, single-file passage' },
-  { id: 'zone-d', name: 'Zone D', desc: 'Queue Terminal', video: 'crowd16.mp4', status: 'YELLOW',
-    area_m2: 200, capacity: 350, location: 'Ticketing and queue waiting area' },
-  { id: 'zone-e', name: 'Zone E', desc: 'South Landing', video: 'crowd2.mp4', status: 'GREEN',
-    area_m2: 300, capacity: 500, location: 'Southern open plaza, multiple exit paths' },
-  { id: 'zone-f', name: 'Zone F', desc: 'East Corridor', video: 'crowd3.mp4', status: 'GREEN',
-    area_m2: 150, capacity: 250, location: 'Eastern connecting corridor between decks' },
+  { id: 'zone-a', name: 'Zone A', video: 'crowd10.mp4', status: 'RED',
+    area_m2: 120, capacity: 200 },
+  { id: 'zone-b', name: 'Zone B', video: 'crowd5.mp4', status: 'BLACK',
+    area_m2: 500, capacity: 800 },
+  { id: 'zone-c', name: 'Zone C', video: 'crowd1.mp4', status: 'ORANGE',
+    area_m2: 80, capacity: 150 },
+  { id: 'zone-d', name: 'Zone D', video: 'crowd16.mp4', status: 'YELLOW',
+    area_m2: 200, capacity: 350 },
+  { id: 'zone-e', name: 'Zone E', video: 'crowd2.mp4', status: 'GREEN',
+    area_m2: 300, capacity: 500 },
+  { id: 'zone-f', name: 'Zone F', video: 'crowd3.mp4', status: 'GREEN',
+    area_m2: 150, capacity: 250 },
 ];
 
 const STATUS_COLORS = {
@@ -176,7 +176,6 @@ function ZoneCard({ zone, monitor, isActive, onClick }) {
         <div className="flex justify-between items-center mb-2">
           <div>
             <div className="text-black font-extrabold text-xs">{zone.name}</div>
-            <div className="text-[#2d4a22] normal-case text-[10px] tracking-normal">{zone.desc}</div>
           </div>
           <div className="text-right">
             <div className="text-black font-extrabold text-sm">{headcount}</div>
@@ -234,10 +233,6 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
           <div className="text-[#3f6333] text-[10px] mb-3">ZONE INFORMATION</div>
           <table className="w-full text-[11px] normal-case tracking-normal">
             <tbody>
-              <tr className="border-b border-[#b8ceb1]">
-                <td className="py-2 text-[#3f6333] font-bold pr-3">Location</td>
-                <td className="py-2 text-black font-extrabold">{zone.location}</td>
-              </tr>
               <tr className="border-b border-[#b8ceb1]">
                 <td className="py-2 text-[#3f6333] font-bold pr-3">Area Size</td>
                 <td className="py-2 text-black font-extrabold">{zone.area_m2} m²</td>
@@ -401,12 +396,10 @@ export default function OperatorConsole() {
         const newZone = {
           id: newId,
           name: `Zone ${String.fromCharCode(65 + zones.length)}`,
-          desc: file.name.replace(/\.[^/.]+$/, ''),
           video: data.filename,
           status: 'GREEN',
           area_m2: 100,
           capacity: 200,
-          location: `Uploaded feed — ${file.name}`,
         };
         setZones(prev => [...prev, newZone]);
         setActiveZoneId(newId);
@@ -477,7 +470,7 @@ export default function OperatorConsole() {
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
             <div className="flex items-center gap-3">
               <span className="text-[#3f6333]">ZONE DETAIL</span>
-              <span className="text-black font-extrabold">{activeZone?.name} — {activeZone?.desc}</span>
+              <span className="text-black font-extrabold">{activeZone?.name}</span>
             </div>
             <div className="flex gap-4">
               {['DENSITY', 'TURBULENCE', 'RISK'].map(tab => (

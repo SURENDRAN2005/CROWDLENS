@@ -96,7 +96,6 @@ async def websocket_endpoint(websocket: WebSocket):
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                # Loop video
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
                 
@@ -104,133 +103,105 @@ async def websocket_endpoint(websocket: WebSocket):
             if frame_count % frame_interval != 0:
                 continue
                 
-            # Resize frame for better detection (higher resolution)
-            frame = cv2.resize(frame, (1280, 720))
+            # Define a helper to run all heavy CPU-bound OpenCV/ML operations
+            def process_frame_sync(f):
+                f = cv2.resize(f, (1280, 720))
+                
+                # --- 1. Detection ---
+                boxes, confidences, fallen_flags = detector.detect(f)
+                headcount = len(boxes)
+                density = headcount / grid_area_m2
+                
+                has_fallen = False
+                for i, box in enumerate(boxes):
+                    x1, y1, x2, y2 = map(int, box)
+                    if fallen_flags[i]:
+                        color = (0, 0, 255)
+                        has_fallen = True
+                        cv2.rectangle(f, (x1, y1), (x2, y2), color, 2)
+                    else:
+                        color = (0, 255, 0)
+                        cv2.rectangle(f, (x1, y1), (x2, y2), color, 1)
+                    label = f"{confidences[i]:.2f}"
+                    cv2.putText(f, label, (x1, max(y1 - 3, 0)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1, cv2.LINE_AA)
+                
+                # --- 2. Optical Flow ---
+                mean_vel, vel_var, dir_entropy, flow_mag = flow_analyzer.analyze(f)
+                reverse_flow_ratio = min(1.0, dir_entropy / 3.0) 
+                
+                # --- 3. SRI & Tension Calculation ---
+                sri, risk_band, f_dens, f_press = sri_engine.calculate_sri(
+                    density=density, mean_velocity=mean_vel,
+                    velocity_variance=vel_var, reverse_flow_ratio=reverse_flow_ratio,
+                    fallen_person_flag=has_fallen
+                )
+                forecast_secs = sri_engine.forecast_critical_time()
+                tension = density * (vel_var + 1.0)
+                
+                # --- 4. Structural Load ---
+                triggers, mass_load, is_overloaded, load_pct = structural_monitor.check_overload(headcount)
+                
+                # --- 5. Crowd Taxonomy & Dynamics ---
+                event = classify_event(density, mean_vel, vel_var, dir_entropy, reverse_flow_ratio)
+                dynamics = classify_dynamics(density, mean_vel, vel_var, sri, has_fallen)
+                
+                # --- 6. Generate Heatmap ---
+                import numpy as np
+                heatmap_layer = np.zeros((f.shape[0], f.shape[1]), dtype=np.float32)
+                for box in boxes:
+                    x1, y1, x2, y2 = map(int, box)
+                    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+                    radius = max((x2 - x1), (y2 - y1))
+                    y_coords, x_coords = np.ogrid[:heatmap_layer.shape[0], :heatmap_layer.shape[1]]
+                    dist = np.sqrt((x_coords - cx)**2 + (y_coords - cy)**2)
+                    heatmap_layer += np.exp(-(dist**2)/(2*(radius**2)))
+                
+                heatmap_norm = cv2.normalize(heatmap_layer, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_INFERNO)
+                frame_heatmap = cv2.addWeighted(f, 0.4, heatmap_color, 0.6, 0)
+                
+                # --- 7. Encode Frames ---
+                _, buffer_yolo = cv2.imencode('.jpg', f, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                frame_yolo_b64 = base64.b64encode(buffer_yolo).decode('utf-8')
+                _, buffer_heat = cv2.imencode('.jpg', frame_heatmap, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                frame_heat_b64 = base64.b64encode(buffer_heat).decode('utf-8')
+                
+                return {
+                    "frame_yolo_b64": frame_yolo_b64,
+                    "frame_heat_b64": frame_heat_b64,
+                    "metrics": {
+                        "headcount": headcount, "density": round(density, 2),
+                        "mean_velocity": round(mean_vel, 2), "velocity_variance": round(vel_var, 2),
+                        "tension": round(tension, 2), "sri": sri, "risk_band": risk_band,
+                        "forecast_seconds": forecast_secs, "structural_load_pct": load_pct,
+                        "structural_triggers": triggers, "is_overloaded": is_overloaded,
+                        "has_fallen": has_fallen,
+                        "event_archetype": {
+                            "name": event.name, "emoji": event.emoji, "confidence": event.confidence,
+                            "visual_signatures": event.visual_signatures, "risk_profile": event.risk_profile,
+                        },
+                        "dynamics_state": {
+                            "state": dynamics.state, "index": dynamics.index, "severity": dynamics.severity,
+                            "definition": dynamics.definition, "visual_biomarkers": dynamics.visual_biomarkers,
+                        },
+                    }
+                }
+                
+            # Run the heavy processing in a threadpool
+            result = await asyncio.to_thread(process_frame_sync, frame)
             
-            # --- 1. Detection ---
-            boxes, confidences, fallen_flags = detector.detect(frame)
-            headcount = len(boxes)
-            
-            # Simple density (people / area)
-            density = headcount / grid_area_m2
-            
-            # Draw boxes on frame
-            has_fallen = False
-            for i, box in enumerate(boxes):
-                x1, y1, x2, y2 = map(int, box)
-                if fallen_flags[i]:
-                    color = (0, 0, 255)   # Red for fallen
-                    has_fallen = True
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                else:
-                    color = (0, 255, 0)   # Green for upright
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
-                # Confidence label — small and unobtrusive
-                label = f"{confidences[i]:.2f}"
-                cv2.putText(frame, label, (x1, max(y1 - 3, 0)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1, cv2.LINE_AA)
-            
-            # --- 2. Optical Flow ---
-            mean_vel, vel_var, dir_entropy, flow_mag = flow_analyzer.analyze(frame)
-            
-            # Mocking reverse flow ratio based on direction entropy for prototype
-            reverse_flow_ratio = min(1.0, dir_entropy / 3.0) 
-            
-            # --- 3. SRI & Tension Calculation ---
-            sri, risk_band, f_dens, f_press = sri_engine.calculate_sri(
-                density=density,
-                mean_velocity=mean_vel,
-                velocity_variance=vel_var,
-                reverse_flow_ratio=reverse_flow_ratio,
-                fallen_person_flag=has_fallen
-            )
-            forecast_secs = sri_engine.forecast_critical_time()
-            tension = density * (vel_var + 1.0) # Mock tension metric
-
-            # --- 4. Structural Load ---
-            triggers, mass_load, is_overloaded, load_pct = structural_monitor.check_overload(headcount)
-
-            # --- 5. Crowd Taxonomy & Dynamics ---
-            event = classify_event(
-                density=density,
-                mean_velocity=mean_vel,
-                velocity_variance=vel_var,
-                direction_entropy=dir_entropy,
-                reverse_flow_ratio=reverse_flow_ratio,
-            )
-            dynamics = classify_dynamics(
-                density=density,
-                mean_velocity=mean_vel,
-                velocity_variance=vel_var,
-                sri=sri,
-                has_fallen=has_fallen,
-            )
-            
-            # --- 5. Generate Heatmap ---
-            import numpy as np
-            # Create a blank heatmap layer
-            heatmap_layer = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.float32)
-            for box in boxes:
-                x1, y1, x2, y2 = map(int, box)
-                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-                radius = max((x2 - x1), (y2 - y1))
-                # Add gaussian blob
-                y_coords, x_coords = np.ogrid[:heatmap_layer.shape[0], :heatmap_layer.shape[1]]
-                dist = np.sqrt((x_coords - cx)**2 + (y_coords - cy)**2)
-                heatmap_layer += np.exp(-(dist**2)/(2*(radius**2)))
-            
-            # Normalize and apply colormap
-            heatmap_norm = cv2.normalize(heatmap_layer, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-            heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_INFERNO)
-            # Blend with original frame slightly
-            frame_heatmap = cv2.addWeighted(frame, 0.4, heatmap_color, 0.6, 0)
-            
-            # --- 6. Encode Frames ---
-            _, buffer_yolo = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
-            frame_yolo_b64 = base64.b64encode(buffer_yolo).decode('utf-8')
-
-            _, buffer_heat = cv2.imencode('.jpg', frame_heatmap, [cv2.IMWRITE_JPEG_QUALITY, 60])
-            frame_heat_b64 = base64.b64encode(buffer_heat).decode('utf-8')
-            
-            # --- 7. Send Update ---
             payload = {
                 "type": "update",
-                "frame": f"data:image/jpeg;base64,{frame_yolo_b64}",
-                "frame_heatmap": f"data:image/jpeg;base64,{frame_heat_b64}",
-                "metrics": {
-                    "headcount": headcount,
-                    "density": round(density, 2),
-                    "mean_velocity": round(mean_vel, 2),
-                    "velocity_variance": round(vel_var, 2),
-                    "tension": round(tension, 2),
-                    "sri": sri,
-                    "risk_band": risk_band,
-                    "forecast_seconds": forecast_secs,
-                    "structural_load_pct": load_pct,
-                    "structural_triggers": triggers,
-                    "is_overloaded": is_overloaded,
-                    "has_fallen": has_fallen,
-                    "event_archetype": {
-                        "name": event.name,
-                        "emoji": event.emoji,
-                        "confidence": event.confidence,
-                        "visual_signatures": event.visual_signatures,
-                        "risk_profile": event.risk_profile,
-                    },
-                    "dynamics_state": {
-                        "state": dynamics.state,
-                        "index": dynamics.index,
-                        "severity": dynamics.severity,
-                        "definition": dynamics.definition,
-                        "visual_biomarkers": dynamics.visual_biomarkers,
-                    },
-                }
+                "frame": f"data:image/jpeg;base64,{result['frame_yolo_b64']}",
+                "frame_heatmap": f"data:image/jpeg;base64,{result['frame_heat_b64']}",
+                "metrics": result["metrics"]
             }
             
             await websocket.send_text(json.dumps(payload))
             
-            # ~10 fps processing target for latency < 1s
-            await asyncio.sleep(0.05)
+            # Allow event loop to process other connections
+            await asyncio.sleep(0.01)
             
     except WebSocketDisconnect:
         print("Client disconnected")

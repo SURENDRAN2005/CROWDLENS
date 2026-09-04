@@ -204,6 +204,115 @@ function ZoneCard({ zone, monitor, isActive, onClick }) {
   );
 }
 
+/* ========== INFO TABS (bottom section) ========== */
+function InfoTabs({ metrics, movement, disasters, actions, severityColor }) {
+  const [infoTab, setInfoTab] = React.useState('MOVEMENT');
+
+  const tabs = [
+    { id: 'MOVEMENT', label: 'CROWD MOVEMENT TYPE' },
+    { id: 'DISASTERS', label: 'POSSIBLE DISASTERS' },
+    { id: 'ACTIONS', label: 'RECOMMENDED ACTIONS' },
+  ];
+
+  return (
+    <div className="flex-1 flex flex-col bg-[#e5f2e0] rounded-xl overflow-hidden min-h-0">
+      {/* Tab bar */}
+      <div className="flex gap-1 p-2 bg-[#cbe1c4] flex-shrink-0">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setInfoTab(tab.id)}
+            className={`px-4 py-2 rounded-lg text-[12px] font-extrabold transition-all duration-150 cursor-pointer
+              ${infoTab === tab.id
+                ? 'bg-[#1a3314] text-[#deedd9] shadow'
+                : 'text-[#1a3314] hover:bg-[#b8ceb1]'
+              }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content — full width */}
+      <div className="flex-1 overflow-y-auto p-5">
+
+        {infoTab === 'MOVEMENT' && (
+          <div className="max-w-3xl space-y-4">
+            <div className="bg-white/70 rounded-xl p-4 border border-[#b8ceb1]">
+              <div className="text-black font-extrabold text-base normal-case mb-1">{movement.type}</div>
+              <div className="text-[#0f2209] text-[13px] normal-case tracking-normal leading-relaxed">{movement.desc}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/70 rounded-xl p-4 border border-[#b8ceb1]">
+                <div className="text-[#1a3314] text-[12px] mb-2">DYNAMICS STATE</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`px-3 py-1 rounded-lg text-[12px] font-extrabold border ${severityColor[metrics?.dynamics_state?.severity || 'LOW']}`}>
+                    {metrics?.dynamics_state?.state || 'PASSIVE'}
+                  </span>
+                  <span className="text-[#1a3314] text-[12px] normal-case">sev: {metrics?.dynamics_state?.severity || 'LOW'}</span>
+                </div>
+                <div className="text-[#0f2209] text-[12px] normal-case tracking-normal leading-relaxed">
+                  {metrics?.dynamics_state?.definition || 'Awaiting classification...'}
+                </div>
+              </div>
+              <div className="bg-white/70 rounded-xl p-4 border border-[#b8ceb1]">
+                <div className="text-[#1a3314] text-[12px] mb-2">VISUAL BIOMARKERS</div>
+                <div className="text-[#0f2209] text-[12px] normal-case tracking-normal italic leading-relaxed">
+                  {metrics?.dynamics_state?.visual_biomarkers || '—'}
+                </div>
+                <div className="text-[#1a3314] text-[12px] mt-3 mb-1">EVENT ARCHETYPE</div>
+                <div className="text-black font-extrabold text-sm normal-case">
+                  {metrics?.event_archetype?.emoji || '👥'} {metrics?.event_archetype?.name || 'Detecting...'}
+                  <span className="text-green-700 text-[12px] ml-2">conf {metrics?.event_archetype?.confidence || '—'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {infoTab === 'DISASTERS' && (
+          <div className="max-w-3xl space-y-3">
+            {disasters.map((d, i) => (
+              <div key={i} className={`rounded-xl p-4 border ${severityColor[d.severity]}`}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-extrabold text-sm normal-case">{d.name}</span>
+                  <span className={`text-[12px] font-extrabold px-2 py-0.5 rounded-lg border ${severityColor[d.severity]}`}>{d.severity}</span>
+                </div>
+                <div className="text-[13px] normal-case tracking-normal leading-relaxed opacity-90">{d.desc}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {infoTab === 'ACTIONS' && (
+          <div className="max-w-3xl space-y-3">
+            {actions.map((action, i) => (
+              <div key={i} className="bg-white/70 rounded-xl px-4 py-3 border border-[#b8ceb1] text-[14px] text-black font-extrabold normal-case tracking-normal leading-relaxed">
+                {action}
+              </div>
+            ))}
+            {/* Threshold gauge */}
+            <div className="bg-white/70 rounded-xl p-4 border border-[#b8ceb1] mt-2">
+              <div className="text-[#1a3314] text-[13px] mb-3">THRESHOLD PROXIMITY</div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex-1 h-3 bg-[#b8ceb1] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-500 ${(metrics?.sri || 0) > 76 ? 'bg-red-600' : (metrics?.sri || 0) > 56 ? 'bg-orange-500' : (metrics?.sri || 0) > 30 ? 'bg-yellow-500' : 'bg-green-600'}`}
+                    style={{ width: `${Math.min(100, metrics?.sri || 0)}%` }}></div>
+                </div>
+                <span className="text-black font-extrabold text-base min-w-[45px] text-right">{Math.round(metrics?.sri || 0)}</span>
+              </div>
+              <div className="flex justify-between text-[11px] text-[#1a3314] font-extrabold">
+                <span>SAFE</span><span>CAUTION</span><span>VOLATILE</span><span>PANIC</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 /* ========== DETAIL PANEL ========== */
 function ZoneDetailPanel({ zone, monitor, activeTab }) {
   const metrics = monitor?.data?.metrics;
@@ -273,82 +382,8 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         </div>
       </div>
 
-      {/* Bottom: 3-column detail sections */}
-      <div className="flex-1 grid grid-cols-3 gap-3 overflow-hidden min-h-0">
-        
-        {/* Column 1: Crowd Movement Type */}
-        <div className="p-4 overflow-y-auto bg-[#e5f2e0] rounded-xl">
-          <div className="text-[#1a3314] text-[12px] mb-3">CROWD MOVEMENT TYPE</div>
-          <div className="bg-white/60 rounded-lg p-3 border border-[#b8ceb1] mb-3">
-            <div className="text-black font-extrabold text-sm mb-1 normal-case">{movement.type}</div>
-            <div className="text-[#0f2209] text-[12px] normal-case tracking-normal leading-relaxed">{movement.desc}</div>
-          </div>
-          <div className="text-[#1a3314] text-[12px] mb-2">DYNAMICS STATE</div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`px-2 py-0.5 rounded text-[12px] font-extrabold border ${severityColor[metrics?.dynamics_state?.severity || 'LOW']}`}>
-              {metrics?.dynamics_state?.state || 'PASSIVE'}
-            </span>
-            <span className="text-[#1a3314] text-[13px] normal-case">sev: {metrics?.dynamics_state?.severity || 'LOW'}</span>
-          </div>
-          <div className="text-[#0f2209] text-[12px] normal-case tracking-normal leading-relaxed">
-            {metrics?.dynamics_state?.definition || 'Awaiting classification...'}
-          </div>
-          <div className="mt-3 text-[#1a3314] text-[12px] mb-1">VISUAL BIOMARKERS</div>
-          <div className="text-[#0f2209] text-[12px] normal-case tracking-normal italic">
-            {metrics?.dynamics_state?.visual_biomarkers || '—'}
-          </div>
-          <div className="mt-3 text-[#1a3314] text-[12px] mb-1">EVENT ARCHETYPE</div>
-          <div className="text-black font-extrabold text-sm normal-case">
-            {metrics?.event_archetype?.emoji || '👥'} {metrics?.event_archetype?.name || 'Detecting...'}
-            <span className="text-green-700 text-[13px] ml-1">conf {metrics?.event_archetype?.confidence || '—'}</span>
-          </div>
-        </div>
-
-        {/* Column 2: Possible Disasters */}
-        <div className="p-4 overflow-y-auto bg-[#e5f2e0] rounded-xl">
-          <div className="text-[#1a3314] text-[12px] mb-3">POSSIBLE DISASTERS</div>
-          <div className="space-y-2">
-            {disasters.map((d, i) => (
-              <div key={i} className={`rounded-lg p-3 border ${severityColor[d.severity]} bg-opacity-50`}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-extrabold text-sm normal-case">{d.name}</span>
-                  <span className={`text-[13px] font-extrabold px-1.5 py-0.5 rounded ${severityColor[d.severity]}`}>{d.severity}</span>
-                </div>
-                <div className="text-[12px] normal-case tracking-normal leading-relaxed opacity-80">{d.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Column 3: Recommended Actions */}
-        <div className="p-4 overflow-y-auto bg-[#e5f2e0] rounded-xl">
-          <div className="text-[#1a3314] text-[12px] mb-3">RECOMMENDED ACTIONS</div>
-          <div className="space-y-2">
-            {actions.map((action, i) => (
-              <div key={i} className="bg-white/60 rounded-lg px-3 py-2 border border-[#b8ceb1] text-[13px] text-black font-extrabold normal-case tracking-normal leading-relaxed">
-                {action}
-              </div>
-            ))}
-          </div>
-          {/* Threshold gauge */}
-          <div className="mt-4 bg-white/60 rounded-lg p-3 border border-[#b8ceb1]">
-            <div className="text-[#1a3314] text-[13px] mb-2">THRESHOLD PROXIMITY</div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="flex-1 h-2 bg-[#b8ceb1] rounded overflow-hidden">
-                <div className={`h-full rounded transition-all duration-500 ${(metrics?.sri || 0) > 76 ? 'bg-red-600' : (metrics?.sri || 0) > 56 ? 'bg-orange-500' : (metrics?.sri || 0) > 30 ? 'bg-yellow-500' : 'bg-green-600'}`}
-                  style={{ width: `${Math.min(100, metrics?.sri || 0)}%` }}></div>
-              </div>
-              <span className="text-black font-extrabold text-sm min-w-[35px] text-right">{Math.round(metrics?.sri || 0)}%</span>
-            </div>
-            <div className="flex justify-between text-[8px] text-[#1a3314]">
-              <span>SAFE</span>
-              <span>CAUTION</span>
-              <span>VOLATILE</span>
-              <span>PANIC</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Bottom: Tabbed info panel */}
+      <InfoTabs metrics={metrics} movement={movement} disasters={disasters} actions={actions} severityColor={severityColor} />
     </div>
   );
 }

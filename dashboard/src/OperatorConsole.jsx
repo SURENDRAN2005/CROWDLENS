@@ -438,7 +438,6 @@ export default function OperatorConsole() {
           </button>
           <input ref={fileInputRef} type="file" accept="video/*" onChange={handleUpload} className="hidden"/>
           <div className="text-[#b45309] font-extrabold">{currentTime} <span className="text-[#3f6333]">IST</span></div>
-          <div>OPERATOR - R. DESHMUKH</div>
         </div>
       </header>
 
@@ -489,11 +488,7 @@ export default function OperatorConsole() {
         </div>
       </div>
 
-      {/* FOOTER */}
-      <footer className="h-7 border-t border-[#b8ceb1] bg-[#deedd9] flex items-center px-4 text-[#3f6333] gap-4 normal-case tracking-normal text-[10px]">
-        <span className="text-green-700 uppercase font-extrabold tracking-widest">AGGREGATE ONLY</span>
-        <span className="font-bold">No facial recognition · ephemeral IDs only · Zone history active · Consent signage at all gates</span>
-      </footer>
+
     </div>
   );
 }

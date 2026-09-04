@@ -327,9 +327,9 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
   const severityColor = { LOW: 'text-green-700 bg-green-100 border-green-300', MEDIUM: 'text-yellow-700 bg-yellow-100 border-yellow-300', HIGH: 'text-orange-700 bg-orange-100 border-orange-300', CRITICAL: 'text-red-700 bg-red-100 border-red-300' };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden gap-3 p-3 bg-[#d6e8d0]">
-      {/* Top: Feed + Zone Info side by side */}
-      <div className="flex gap-3 rounded-xl overflow-hidden" style={{ minHeight: '250px' }}>
+    <div className="flex-1 flex flex-col overflow-hidden gap-3 p-3 bg-[#d6e8d0] min-h-0">
+      {/* Top: Feed + Zone Info side by side — fixed height so tabs get enough room */}
+      <div className="flex gap-3 flex-shrink-0" style={{ height: '200px' }}>
         {/* Camera Feed */}
         <div className="relative flex-1 bg-black rounded-xl overflow-hidden">
           {src ? (
@@ -382,7 +382,7 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         </div>
       </div>
 
-      {/* Bottom: Tabbed info panel */}
+      {/* Bottom: Tabbed info panel — takes all remaining vertical space */}
       <InfoTabs metrics={metrics} movement={movement} disasters={disasters} actions={actions} severityColor={severityColor} />
     </div>
   );
@@ -510,7 +510,7 @@ export default function OperatorConsole() {
         </aside>
 
         {/* CENTER + RIGHT: DETAIL VIEW */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#d6e8d0] rounded-2xl overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#d6e8d0] rounded-2xl overflow-hidden">
           {/* Tabs */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
             <div className="flex items-center gap-3">

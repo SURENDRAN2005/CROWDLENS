@@ -1,129 +1,361 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+/* ========== ZONE METADATA ========== */
 const INITIAL_ZONES = [
-  { id: 'zone-a', name: 'Zone A', desc: 'Bridge Approach N', video: 'crowd10.mp4', status: 'RED' },
-  { id: 'zone-b', name: 'Zone B', desc: 'Central Deck', video: 'crowd5.mp4', status: 'BLACK' },
-  { id: 'zone-c', name: 'Zone C', desc: 'North Exit Gate', video: 'crowd1.mp4', status: 'ORANGE' },
-  { id: 'zone-d', name: 'Zone D', desc: 'Queue Terminal', video: 'crowd16.mp4', status: 'YELLOW' },
-  { id: 'zone-e', name: 'Zone E', desc: 'South Landing', video: 'crowd2.mp4', status: 'GREEN' },
-  { id: 'zone-f', name: 'Zone F', desc: 'East Corridor', video: 'crowd3.mp4', status: 'GREEN' },
+  { id: 'zone-a', name: 'Zone A', desc: 'Bridge Approach N', video: 'crowd10.mp4', status: 'RED',
+    area_m2: 120, capacity: 200, location: 'Northern bridge entry ramp, narrow corridor' },
+  { id: 'zone-b', name: 'Zone B', desc: 'Central Deck', video: 'crowd5.mp4', status: 'BLACK',
+    area_m2: 500, capacity: 800, location: 'Main open-air deck, center of venue' },
+  { id: 'zone-c', name: 'Zone C', desc: 'North Exit Gate', video: 'crowd1.mp4', status: 'ORANGE',
+    area_m2: 80, capacity: 150, location: 'Bottleneck exit gate, single-file passage' },
+  { id: 'zone-d', name: 'Zone D', desc: 'Queue Terminal', video: 'crowd16.mp4', status: 'YELLOW',
+    area_m2: 200, capacity: 350, location: 'Ticketing and queue waiting area' },
+  { id: 'zone-e', name: 'Zone E', desc: 'South Landing', video: 'crowd2.mp4', status: 'GREEN',
+    area_m2: 300, capacity: 500, location: 'Southern open plaza, multiple exit paths' },
+  { id: 'zone-f', name: 'Zone F', desc: 'East Corridor', video: 'crowd3.mp4', status: 'GREEN',
+    area_m2: 150, capacity: 250, location: 'Eastern connecting corridor between decks' },
 ];
 
-const COLORS = {
-  RED: 'text-red-700 font-extrabold',
-  BLACK: 'text-white bg-black px-2 py-0.5 rounded font-extrabold',
-  ORANGE: 'text-orange-700 font-extrabold',
-  YELLOW: 'text-yellow-700 font-extrabold',
-  GREEN: 'text-green-700 font-extrabold'
+const STATUS_COLORS = {
+  RED:    { text: 'text-red-700',    bg: 'bg-red-100',    border: 'border-red-300',    dot: 'bg-red-600' },
+  BLACK:  { text: 'text-black',      bg: 'bg-gray-200',   border: 'border-gray-400',   dot: 'bg-black' },
+  ORANGE: { text: 'text-orange-700', bg: 'bg-orange-100', border: 'border-orange-300', dot: 'bg-orange-500' },
+  YELLOW: { text: 'text-yellow-700', bg: 'bg-yellow-100', border: 'border-yellow-300', dot: 'bg-yellow-500' },
+  GREEN:  { text: 'text-green-700',  bg: 'bg-green-100',  border: 'border-green-300',  dot: 'bg-green-500' },
 };
 
-/* ---------- WebSocket Hook ---------- */
+/* ========== SMART ANALYSIS FUNCTIONS ========== */
+function getMovementType(metrics) {
+  if (!metrics) return { type: 'Unknown', desc: 'Awaiting data...' };
+  const v = metrics.mean_velocity || 0;
+  const vv = metrics.velocity_variance || 0;
+  const state = metrics.dynamics_state?.state || 'Passive';
+
+  if (state === 'Panic' || state === 'Dispersing')
+    return { type: 'Chaotic Dispersal', desc: 'Crowd is scattering in multiple directions with high velocity variance. Evacuation pattern detected.' };
+  if (v < 0.5 && vv < 1.0)
+    return { type: 'Static / Stationary', desc: 'Crowd is mostly still. Minimal body movement. Typical of seated or waiting groups.' };
+  if (v < 1.5 && vv < 2.0)
+    return { type: 'Laminar Flow', desc: 'Orderly, unidirectional movement at walking pace. Low turbulence. Normal pedestrian behavior.' };
+  if (v < 3.0 && vv < 4.0)
+    return { type: 'Turbulent Flow', desc: 'Moderate speed with inconsistent directions. Crowd members are weaving and changing course. Early warning sign.' };
+  if (vv >= 4.0)
+    return { type: 'Stop-and-Go Waves', desc: 'High velocity variance indicates compression waves propagating through crowd. Precursor to crush events.' };
+  return { type: 'Active Movement', desc: 'Purposeful movement with moderate energy. Watch for acceleration.' };
+}
+
+function getPossibleDisasters(metrics, zone) {
+  const disasters = [];
+  if (!metrics) return [{ name: 'Awaiting data', severity: 'LOW', desc: 'No live metrics yet.' }];
+  
+  const density = metrics.density || 0;
+  const sri = metrics.sri || 0;
+  const headcount = metrics.headcount || 0;
+  const occupancy = (headcount / zone.capacity) * 100;
+  const loadPct = metrics.structural_load_pct || 0;
+
+  if (density > 6) disasters.push({ name: 'Crowd Crush', severity: 'CRITICAL', desc: `Density at ${density.toFixed(1)} ppm² exceeds the 6 ppm² lethal threshold. Asphyxiation risk imminent.` });
+  else if (density > 4) disasters.push({ name: 'Crowd Crush Risk', severity: 'HIGH', desc: `Density at ${density.toFixed(1)} ppm² approaching dangerous levels. Compression forces increasing.` });
+
+  if (sri > 76) disasters.push({ name: 'Stampede', severity: 'CRITICAL', desc: `SRI at ${sri.toFixed(0)} — panic-level risk. Counter-flow and fallen persons likely.` });
+  else if (sri > 56) disasters.push({ name: 'Stampede Risk', severity: 'HIGH', desc: `SRI at ${sri.toFixed(0)} — volatile crowd dynamics. Sudden trigger could cause mass flight.` });
+
+  if (loadPct > 95) disasters.push({ name: 'Structural Failure', severity: 'CRITICAL', desc: `Load at ${loadPct}% of rated capacity. Risk of platform/bridge collapse.` });
+  else if (loadPct > 80) disasters.push({ name: 'Structural Overload', severity: 'HIGH', desc: `Load at ${loadPct}% — approaching structural limits. Resonance amplification possible.` });
+
+  if (occupancy > 100) disasters.push({ name: 'Overcapacity', severity: 'HIGH', desc: `Zone is at ${occupancy.toFixed(0)}% of safe capacity (${headcount}/${zone.capacity}).` });
+
+  if (metrics.has_fallen) disasters.push({ name: 'Fallen Person', severity: 'CRITICAL', desc: 'Horizontal body detected in crowd. Immediate trampling risk.' });
+
+  if (disasters.length === 0) disasters.push({ name: 'No Immediate Threat', severity: 'LOW', desc: 'All indicators within safe operating parameters.' });
+  return disasters;
+}
+
+function getRecommendedActions(metrics, zone) {
+  if (!metrics) return ['Awaiting live data feed...'];
+  const headcount = metrics.headcount || 0;
+  const occupancy = (headcount / zone.capacity) * 100;
+  const sri = metrics.sri || 0;
+  const actions = [];
+
+  if (sri >= 76) {
+    actions.push('🔴 HALT all entry gates immediately');
+    actions.push('🔴 Activate emergency PA — announce calm evacuation');
+    actions.push('🔴 Deploy crowd marshals to all exits');
+    actions.push('🔴 Notify local emergency services (fire, ambulance)');
+  } else if (sri >= 56) {
+    actions.push('🟠 Restrict entry to 50% flow rate');
+    actions.push('🟠 Position crowd marshals at chokepoints');
+    actions.push('🟠 Pre-stage medical team near exits');
+    actions.push('🟠 Monitor for fallen persons and counter-flow');
+  } else if (occupancy >= 80) {
+    actions.push('🟡 Begin metering entry — one-in-one-out policy');
+    actions.push('🟡 Open auxiliary exit routes');
+    actions.push('🟡 Announce via PA: crowd advisory');
+  } else if (occupancy >= 60) {
+    actions.push('🟢 Standard monitoring — increase camera sweep rate');
+    actions.push('🟢 Brief crowd marshals on current density');
+  } else {
+    actions.push('✅ Normal operations — no intervention required');
+  }
+
+  if (metrics.has_fallen) {
+    actions.unshift('🔴 IMMEDIATE: Fallen person detected — dispatch rescue team');
+  }
+  if (metrics.structural_load_pct > 90) {
+    actions.unshift('🔴 STRUCTURAL: Evacuate load-bearing area immediately');
+  }
+
+  return actions;
+}
+
+/* ========== WebSocket Hook ========== */
 function useZoneMonitor(zone) {
   const [data, setData] = useState(null);
   const [connected, setConnected] = useState(false);
   const ws = useRef(null);
-  const zoneRef = useRef(zone);
-
-  useEffect(() => {
-    zoneRef.current = zone;
-  }, [zone]);
 
   useEffect(() => {
     if (!zone) return;
-    
-    const connect = () => {
-      ws.current = new WebSocket('ws://localhost:8000/ws/analyze');
-      
-      ws.current.onopen = () => {
-        setConnected(true);
-        ws.current.send(JSON.stringify({ video_filename: zoneRef.current.video }));
-      };
-      
-      ws.current.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'update') {
-            setData(msg);
-          }
-        } catch (e) {
-          console.error("Parse error", e);
-        }
-      };
-
-      ws.current.onclose = () => {
-        setConnected(false);
-      };
-
-      ws.current.onerror = () => {
-        setConnected(false);
-      };
+    ws.current = new WebSocket('ws://localhost:8000/ws/analyze');
+    ws.current.onopen = () => {
+      setConnected(true);
+      ws.current.send(JSON.stringify({ video_filename: zone.video }));
     };
-
-    connect();
-
-    return () => {
-      if (ws.current) {
-        ws.current.close();
-      }
+    ws.current.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'update') setData(msg);
+      } catch (e) { console.error("Parse error", e); }
     };
+    ws.current.onclose = () => setConnected(false);
+    ws.current.onerror = () => setConnected(false);
+    return () => { if (ws.current) ws.current.close(); };
   }, [zone?.id, zone?.video]);
 
   return { data, connected };
 }
 
-/* ---------- Camera Card Component ---------- */
-function CameraCard({ zone, monitor, activeTab, isActive, onClick }) {
-  const src = activeTab === 'TURBULENCE' || activeTab === 'RISK' 
-    ? monitor.data?.frame_heatmap 
-    : monitor.data?.frame;
-  const pressureText = monitor.data?.metrics?.tension > 5 ? 'pressure rising' : 'queue forming';
-  const density = monitor.data?.metrics?.density || '0.0';
+/* ========== ZONE CARD ========== */
+function ZoneCard({ zone, monitor, isActive, onClick }) {
+  const metrics = monitor.data?.metrics;
+  const headcount = metrics?.headcount || 0;
+  const occupancy = Math.min(100, Math.round((headcount / zone.capacity) * 100));
+  const sc = STATUS_COLORS[zone.status] || STATUS_COLORS.GREEN;
+  const src = monitor.data?.frame;
 
   return (
-    <div 
+    <div
       onClick={onClick}
-      className={`relative bg-black flex flex-col overflow-hidden group cursor-pointer min-h-[280px] ${isActive ? 'ring-2 ring-black' : ''}`}
+      className={`rounded-lg overflow-hidden cursor-pointer transition-all duration-200 border-2 ${isActive ? 'border-black ring-2 ring-black/20 scale-[1.01]' : `${sc.border} hover:border-black/40`} bg-white/60`}
     >
-      {/* Video Fill */}
-      <div className="absolute inset-0 flex items-center justify-center bg-black">
+      {/* Camera preview */}
+      <div className="relative h-36 bg-black">
         {src ? (
           <img src={src} className="w-full h-full object-cover opacity-90" alt="feed"/>
         ) : (
-          <div className="text-[#555] flex flex-col items-center gap-2">
-            <div className="w-4 h-4 border-2 border-[#555] border-t-transparent rounded-full animate-spin"></div>
-            <span>CONNECTING...</span>
+          <div className="flex items-center justify-center h-full text-[#555] text-[10px]">
+            <div className="w-3 h-3 border-2 border-[#555] border-t-transparent rounded-full animate-spin mr-2"></div>
+            CONNECTING
           </div>
         )}
+        {/* Overlay badges */}
+        <div className="absolute top-2 left-2 flex gap-1.5">
+          <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-1.5 py-0.5 text-[9px] text-black font-extrabold rounded">{zone.name}</span>
+          <span className={`${sc.bg} ${sc.text} border ${sc.border} px-1.5 py-0.5 text-[9px] font-extrabold rounded`}>{zone.status}</span>
+        </div>
+        {monitor.connected && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>}
+        {/* Density overlay */}
+        <div className="absolute bottom-2 left-2 bg-black/70 text-white px-1.5 py-0.5 rounded text-[9px] font-bold">
+          {metrics?.density?.toFixed(1) || '0.0'} ppm²
+        </div>
       </div>
       
-      {/* Grid overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '20% 20%' }}></div>
-
-      {/* Badges */}
-      <div className="absolute top-3 left-3 flex gap-2">
-        <div className="bg-[#deedd9] border border-[#b8ceb1] px-2 py-1 text-black font-extrabold text-[10px]">{zone.name}</div>
-        <div className={`bg-[#deedd9] border border-[#b8ceb1] px-2 py-1 text-[10px] ${COLORS[zone.status]?.replace('bg-black', '').replace('text-white', 'text-black') || 'text-black'} font-extrabold`}>{zone.status}</div>
-        {monitor.connected && <div className="bg-green-600 w-2 h-2 rounded-full mt-1.5 animate-pulse"></div>}
-      </div>
-
-      {/* Bottom Stats */}
-      <div className="absolute bottom-3 left-3 right-3 flex justify-between text-white bg-black/60 px-2 py-1 rounded text-[10px]">
-        <span className="font-extrabold">{density} ppm²</span>
-        <span className="normal-case font-bold">{pressureText}</span>
+      {/* Card body */}
+      <div className="p-3">
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <div className="text-black font-extrabold text-xs">{zone.name}</div>
+            <div className="text-[#2d4a22] normal-case text-[10px] tracking-normal">{zone.desc}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-black font-extrabold text-sm">{headcount}</div>
+            <div className="text-[#3f6333] text-[9px]">/{zone.capacity}</div>
+          </div>
+        </div>
+        {/* Occupancy bar */}
+        <div className="w-full h-1.5 bg-[#b8ceb1] rounded overflow-hidden">
+          <div className={`h-full transition-all duration-300 rounded ${occupancy > 90 ? 'bg-red-600' : occupancy > 70 ? 'bg-orange-500' : occupancy > 50 ? 'bg-yellow-500' : 'bg-green-600'}`}
+            style={{ width: `${occupancy}%` }}></div>
+        </div>
+        <div className="text-[9px] text-[#3f6333] mt-1">{occupancy}% capacity · {zone.area_m2}m²</div>
       </div>
     </div>
   );
 }
 
-/* ---------- Main Console ---------- */
+/* ========== DETAIL PANEL ========== */
+function ZoneDetailPanel({ zone, monitor, activeTab }) {
+  const metrics = monitor?.data?.metrics;
+  const movement = getMovementType(metrics);
+  const disasters = getPossibleDisasters(metrics, zone);
+  const actions = getRecommendedActions(metrics, zone);
+  const headcount = metrics?.headcount || 0;
+  const occupancy = Math.min(100, Math.round((headcount / zone.capacity) * 100));
+  const src = activeTab === 'TURBULENCE' || activeTab === 'RISK' ? monitor?.data?.frame_heatmap : monitor?.data?.frame;
+  const sc = STATUS_COLORS[zone.status] || STATUS_COLORS.GREEN;
+
+  const severityColor = { LOW: 'text-green-700 bg-green-100 border-green-300', MEDIUM: 'text-yellow-700 bg-yellow-100 border-yellow-300', HIGH: 'text-orange-700 bg-orange-100 border-orange-300', CRITICAL: 'text-red-700 bg-red-100 border-red-300' };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Top: Feed + Zone Info side by side */}
+      <div className="flex gap-0 border-b border-[#b8ceb1]" style={{ minHeight: '260px' }}>
+        {/* Camera Feed */}
+        <div className="relative w-1/2 bg-black flex-shrink-0">
+          {src ? (
+            <img src={src} className="w-full h-full object-cover" alt="feed"/>
+          ) : (
+            <div className="flex items-center justify-center h-full text-[#555]">CONNECTING...</div>
+          )}
+          <div className="absolute top-3 left-3 flex gap-2">
+            <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-2 py-1 text-[10px] text-black font-extrabold rounded">{zone.name}</span>
+            <span className={`${sc.bg} ${sc.text} border ${sc.border} px-2 py-1 text-[10px] font-extrabold rounded`}>{zone.status}</span>
+          </div>
+          <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white px-2 py-1 rounded text-[10px] flex justify-between font-bold">
+            <span>{metrics?.density?.toFixed(1) || '0.0'} ppm²</span>
+            <span>SRI {Math.round(metrics?.sri || 0)}</span>
+            <span>{headcount} people</span>
+          </div>
+        </div>
+        
+        {/* Zone Info */}
+        <div className="w-1/2 p-4 bg-[#e5f2e0] overflow-y-auto">
+          <div className="text-[#3f6333] text-[10px] mb-3">ZONE INFORMATION</div>
+          <table className="w-full text-[11px] normal-case tracking-normal">
+            <tbody>
+              <tr className="border-b border-[#b8ceb1]">
+                <td className="py-2 text-[#3f6333] font-bold pr-3">Location</td>
+                <td className="py-2 text-black font-extrabold">{zone.location}</td>
+              </tr>
+              <tr className="border-b border-[#b8ceb1]">
+                <td className="py-2 text-[#3f6333] font-bold pr-3">Area Size</td>
+                <td className="py-2 text-black font-extrabold">{zone.area_m2} m²</td>
+              </tr>
+              <tr className="border-b border-[#b8ceb1]">
+                <td className="py-2 text-[#3f6333] font-bold pr-3">Max Capacity</td>
+                <td className="py-2 text-black font-extrabold">{zone.capacity} persons</td>
+              </tr>
+              <tr className="border-b border-[#b8ceb1]">
+                <td className="py-2 text-[#3f6333] font-bold pr-3">Current Count</td>
+                <td className="py-2">
+                  <span className={`font-extrabold ${occupancy > 90 ? 'text-red-700' : occupancy > 70 ? 'text-orange-700' : 'text-black'}`}>
+                    {headcount} ({occupancy}%)
+                  </span>
+                </td>
+              </tr>
+              <tr className="border-b border-[#b8ceb1]">
+                <td className="py-2 text-[#3f6333] font-bold pr-3">Density</td>
+                <td className="py-2 text-black font-extrabold">{metrics?.density?.toFixed(2) || '—'} ppm²</td>
+              </tr>
+              <tr>
+                <td className="py-2 text-[#3f6333] font-bold pr-3">Struct. Load</td>
+                <td className="py-2 text-black font-extrabold">{metrics?.structural_load_pct || '—'}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Bottom: 3-column detail sections */}
+      <div className="flex-1 grid grid-cols-3 gap-0 overflow-hidden">
+        
+        {/* Column 1: Crowd Movement Type */}
+        <div className="p-4 border-r border-[#b8ceb1] overflow-y-auto bg-[#deedd9]">
+          <div className="text-[#3f6333] text-[10px] mb-3">CROWD MOVEMENT TYPE</div>
+          <div className="bg-white/60 rounded-lg p-3 border border-[#b8ceb1] mb-3">
+            <div className="text-black font-extrabold text-sm mb-1 normal-case">{movement.type}</div>
+            <div className="text-[#2d4a22] text-[10px] normal-case tracking-normal leading-relaxed">{movement.desc}</div>
+          </div>
+          <div className="text-[#3f6333] text-[10px] mb-2">DYNAMICS STATE</div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${severityColor[metrics?.dynamics_state?.severity || 'LOW']}`}>
+              {metrics?.dynamics_state?.state || 'PASSIVE'}
+            </span>
+            <span className="text-[#3f6333] text-[9px] normal-case">sev: {metrics?.dynamics_state?.severity || 'LOW'}</span>
+          </div>
+          <div className="text-[#2d4a22] text-[10px] normal-case tracking-normal leading-relaxed">
+            {metrics?.dynamics_state?.definition || 'Awaiting classification...'}
+          </div>
+          <div className="mt-3 text-[#3f6333] text-[10px] mb-1">VISUAL BIOMARKERS</div>
+          <div className="text-[#2d4a22] text-[10px] normal-case tracking-normal italic">
+            {metrics?.dynamics_state?.visual_biomarkers || '—'}
+          </div>
+          <div className="mt-3 text-[#3f6333] text-[10px] mb-1">EVENT ARCHETYPE</div>
+          <div className="text-black font-extrabold text-xs normal-case">
+            {metrics?.event_archetype?.emoji || '👥'} {metrics?.event_archetype?.name || 'Detecting...'}
+            <span className="text-green-700 text-[9px] ml-1">conf {metrics?.event_archetype?.confidence || '—'}</span>
+          </div>
+        </div>
+
+        {/* Column 2: Possible Disasters */}
+        <div className="p-4 border-r border-[#b8ceb1] overflow-y-auto bg-[#deedd9]">
+          <div className="text-[#3f6333] text-[10px] mb-3">POSSIBLE DISASTERS</div>
+          <div className="space-y-2">
+            {disasters.map((d, i) => (
+              <div key={i} className={`rounded-lg p-3 border ${severityColor[d.severity]} bg-opacity-50`}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-extrabold text-xs normal-case">{d.name}</span>
+                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${severityColor[d.severity]}`}>{d.severity}</span>
+                </div>
+                <div className="text-[10px] normal-case tracking-normal leading-relaxed opacity-80">{d.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Column 3: Recommended Actions */}
+        <div className="p-4 overflow-y-auto bg-[#deedd9]">
+          <div className="text-[#3f6333] text-[10px] mb-3">RECOMMENDED ACTIONS</div>
+          <div className="space-y-2">
+            {actions.map((action, i) => (
+              <div key={i} className="bg-white/60 rounded-lg px-3 py-2 border border-[#b8ceb1] text-[11px] text-black font-bold normal-case tracking-normal leading-relaxed">
+                {action}
+              </div>
+            ))}
+          </div>
+          {/* Threshold gauge */}
+          <div className="mt-4 bg-white/60 rounded-lg p-3 border border-[#b8ceb1]">
+            <div className="text-[#3f6333] text-[9px] mb-2">THRESHOLD PROXIMITY</div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex-1 h-2 bg-[#b8ceb1] rounded overflow-hidden">
+                <div className={`h-full rounded transition-all duration-500 ${(metrics?.sri || 0) > 76 ? 'bg-red-600' : (metrics?.sri || 0) > 56 ? 'bg-orange-500' : (metrics?.sri || 0) > 30 ? 'bg-yellow-500' : 'bg-green-600'}`}
+                  style={{ width: `${Math.min(100, metrics?.sri || 0)}%` }}></div>
+              </div>
+              <span className="text-black font-extrabold text-xs min-w-[35px] text-right">{Math.round(metrics?.sri || 0)}%</span>
+            </div>
+            <div className="flex justify-between text-[8px] text-[#3f6333]">
+              <span>SAFE</span>
+              <span>CAUTION</span>
+              <span>VOLATILE</span>
+              <span>PANIC</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========== MAIN CONSOLE ========== */
 export default function OperatorConsole() {
   const [zones, setZones] = useState(INITIAL_ZONES);
-  const [activeZoneId, setActiveZoneId] = useState('zone-b');
+  const [activeZoneId, setActiveZoneId] = useState('zone-a');
   const [activeTab, setActiveTab] = useState('DENSITY');
   const [currentTime, setCurrentTime] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
-  
+
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -134,7 +366,7 @@ export default function OperatorConsole() {
 
   const activeZone = zones.find(z => z.id === activeZoneId);
 
-  // Create monitors for ALL zones
+  // Monitors for up to 8 zones
   const m0 = useZoneMonitor(zones[0]);
   const m1 = useZoneMonitor(zones[1]);
   const m2 = useZoneMonitor(zones[2]);
@@ -146,35 +378,42 @@ export default function OperatorConsole() {
   const allMonitors = [m0, m1, m2, m3, m4, m5, m6, m7];
   const monitors = allMonitors.slice(0, zones.length);
 
-  // Active monitor for Right Panel
   const activeIdx = zones.findIndex(z => z.id === activeZoneId);
-  const activeMonitor = activeIdx >= 0 ? monitors[activeIdx] : monitors[0]; 
-  const amData = activeMonitor?.data?.metrics || {};
+  const activeMonitor = activeIdx >= 0 ? monitors[activeIdx] : monitors[0];
 
   // Upload handler
   const handleUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (!file.type.startsWith('video/')) { alert('Please select a valid video file.'); return; }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('http://localhost:8000/upload', { method: 'POST', body: formData });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      const res = await fetch('http://localhost:8000/upload', { method: 'POST', body: formData, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const data = await res.json();
       if (data.filename) {
         const newId = `zone-${String.fromCharCode(97 + zones.length)}`;
         const newZone = {
           id: newId,
           name: `Zone ${String.fromCharCode(65 + zones.length)}`,
-          desc: file.name.replace('.mp4', ''),
+          desc: file.name.replace(/\.[^/.]+$/, ''),
           video: data.filename,
           status: 'GREEN',
+          area_m2: 100,
+          capacity: 200,
+          location: `Uploaded feed — ${file.name}`,
         };
         setZones(prev => [...prev, newZone]);
         setActiveZoneId(newId);
+        alert(`Video "${file.name}" uploaded → streaming as ${newZone.name}`);
       }
     } catch (err) {
-      console.error('Upload failed:', err);
+      alert(err.name === 'AbortError' ? 'Upload timed out.' : `Upload failed: ${err.message}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -191,47 +430,21 @@ export default function OperatorConsole() {
           <span className="text-black tracking-widest text-sm font-extrabold">CROWDLENS</span>
           <span className="text-[#2d4a22]">OPERATOR CONSOLE v0.9</span>
         </div>
-        <div className="flex items-center gap-6 text-[#2d4a22]">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4 text-[#2d4a22]">
+          <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse"></div>
             <span>FEED {String(zones.length).padStart(2, '0')} LIVE</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-600"></div>
-            <span>LINK 12ms</span>
-          </div>
-
-          {/* UPLOAD BUTTON */}
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-1.5 bg-[#2d4a22] text-[#deedd9] px-3 py-1.5 rounded hover:bg-[#1a3314] transition-colors cursor-pointer disabled:opacity-50"
-          >
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+            className="flex items-center gap-1.5 bg-[#2d4a22] text-[#deedd9] px-3 py-1.5 rounded hover:bg-[#1a3314] transition-colors cursor-pointer disabled:opacity-50">
             {uploading ? (
-              <>
-                <div className="w-3 h-3 border-2 border-[#deedd9] border-t-transparent rounded-full animate-spin"></div>
-                <span>UPLOADING...</span>
-              </>
+              <><div className="w-3 h-3 border-2 border-[#deedd9] border-t-transparent rounded-full animate-spin"></div><span>UPLOADING...</span></>
             ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <span>UPLOAD VIDEO</span>
-              </>
+              <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>UPLOAD VIDEO</span></>
             )}
           </button>
-          <input 
-            ref={fileInputRef}
-            type="file" 
-            accept="video/*" 
-            onChange={handleUpload}
-            className="hidden"
-          />
-
-          <div className="text-[#b45309] min-w-[80px] text-right font-extrabold">{currentTime} <span className="text-[#3f6333]">IST</span></div>
+          <input ref={fileInputRef} type="file" accept="video/*" onChange={handleUpload} className="hidden"/>
+          <div className="text-[#b45309] font-extrabold">{currentTime} <span className="text-[#3f6333]">IST</span></div>
           <div>OPERATOR - R. DESHMUKH</div>
         </div>
       </header>
@@ -239,204 +452,54 @@ export default function OperatorConsole() {
       {/* MAIN LAYOUT */}
       <div className="flex flex-1 overflow-hidden">
         
-        {/* LEFT PANEL - ZONE RAIL */}
-        <aside className="w-[240px] flex flex-col border-r border-[#b8ceb1] bg-[#cbe1c4]">
-          <div className="p-4 border-b border-[#b8ceb1] text-[#3f6333] flex justify-between items-center">
-            <span>ZONE RAIL</span>
+        {/* LEFT: SCROLLABLE ZONE CARDS */}
+        <aside className="w-[260px] flex flex-col border-r border-[#b8ceb1] bg-[#d1e2cb]">
+          <div className="p-3 border-b border-[#b8ceb1] text-[#3f6333] flex justify-between items-center">
+            <span>ZONE CARDS</span>
             <span className="text-black font-extrabold">{zones.length}</span>
           </div>
-          <div className="flex-1 overflow-y-auto pt-2">
-            {zones.map(zone => (
-              <div 
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {zones.map((zone, idx) => (
+              <ZoneCard
                 key={zone.id}
+                zone={zone}
+                monitor={monitors[idx]}
+                isActive={activeZoneId === zone.id}
                 onClick={() => setActiveZoneId(zone.id)}
-                className={`px-4 py-3 cursor-pointer flex justify-between items-start transition-colors ${activeZoneId === zone.id ? 'bg-[#b8ceb1] border-l-2 border-black' : 'hover:bg-[#c2d9bb] border-l-2 border-transparent'}`}
-              >
-                <div>
-                  <div className="text-black font-extrabold mb-1">{zone.name}</div>
-                  <div className="text-[#2d4a22] normal-case tracking-normal text-[10px]">{zone.desc}</div>
-                </div>
-                <div className={`font-extrabold ${COLORS[zone.status] || 'text-[#2d4a22]'} ${zone.status === 'BLACK' && activeZoneId !== zone.id ? 'bg-transparent text-black' : ''}`}>
-                  {zone.status}
-                </div>
-              </div>
+              />
             ))}
-          </div>
-
-          <div className="p-4 border-t border-[#b8ceb1]">
-            <div className="text-[#3f6333] mb-2">EVENT ARCHETYPE</div>
-            <div className="text-black text-sm mb-1 font-extrabold normal-case">
-              Temple Festival <span className="text-green-700 font-mono text-[10px] ml-1 uppercase">conf 0.91</span>
-            </div>
-            <div className="text-[#2d4a22] normal-case">Dynamics · Aggressive</div>
           </div>
         </aside>
 
-        {/* CENTER PANEL - SCROLLABLE CAMERA MOSAIC */}
-        <main className="flex-1 flex flex-col min-w-0 bg-[#dbe8d6]">
+        {/* CENTER + RIGHT: DETAIL VIEW */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Tabs */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
             <div className="flex items-center gap-3">
-              <span className="text-[#3f6333]">CAMERA MOSAIC</span>
-              <span className="text-black font-extrabold">{zones.length} FEEDS</span>
+              <span className="text-[#3f6333]">ZONE DETAIL</span>
+              <span className="text-black font-extrabold">{activeZone?.name} — {activeZone?.desc}</span>
             </div>
             <div className="flex gap-4">
               {['DENSITY', 'TURBULENCE', 'RISK'].map(tab => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`${activeTab === tab ? 'text-black border-b-2 border-black' : 'text-[#3f6333] hover:text-black'} pb-1 transition-colors font-extrabold`}
-                >
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className={`${activeTab === tab ? 'text-black border-b-2 border-black' : 'text-[#3f6333] hover:text-black'} pb-1 transition-colors font-extrabold`}>
                   {tab}
                 </button>
               ))}
             </div>
           </div>
-          
-          {/* Scrollable grid — 3 columns, auto rows */}
-          <div className="flex-1 overflow-y-auto p-[2px]">
-            <div className="grid grid-cols-3 gap-[2px] bg-[#b8ceb1]">
-              {monitors.map((m, idx) => {
-                const zone = zones[idx];
-                if (!zone) return null;
-                return (
-                  <CameraCard 
-                    key={zone.id}
-                    zone={zone}
-                    monitor={m}
-                    activeTab={activeTab}
-                    isActive={activeZoneId === zone.id}
-                    onClick={() => setActiveZoneId(zone.id)}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        </main>
 
-        {/* RIGHT PANEL - METRICS ENGINE */}
-        <aside className="w-[360px] flex flex-col border-l border-[#b8ceb1] bg-[#cbe1c4] overflow-y-auto">
-          
-          {/* SRI Section */}
-          <div className="p-6 border-b border-[#b8ceb1]">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[#3f6333]">STAMPEDE RISK INDEX</span>
-              <span className="text-[#3f6333] normal-case">90s horizon</span>
-            </div>
-            <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-6xl font-extrabold text-black">{Math.round(amData?.sri || 93)}</span>
-              <span className="text-xl text-[#2d4a22] font-extrabold">/ {amData?.risk_band || 'BLACK'}</span>
-            </div>
-            
-            <div className="text-black mb-1 normal-case tracking-normal">Critical in {amData?.forecast_seconds ? Math.round(amData.forecast_seconds/60) : '4'} min · {activeZone?.name}</div>
-            <div className="text-[#3f6333] normal-case tracking-normal">Immediate evacuation · notify disaster response</div>
-          </div>
-
-          {/* Structural Section */}
-          <div className="p-6 border-b border-[#b8ceb1]">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[#3f6333]">STRUCTURAL LOAD</span>
-              <span className="text-orange-700 font-extrabold">{amData?.structural_load_pct || 99}%</span>
-            </div>
-            <div className="w-full h-2 bg-[#b8ceb1] mb-4 relative overflow-hidden rounded">
-              <div className="absolute top-0 left-0 h-full bg-orange-600 transition-all duration-300" style={{ width: `${amData?.structural_load_pct || 99}%` }}></div>
-            </div>
-            <div className="flex justify-between text-[#2d4a22]">
-              <span>5.7 kN/m² / 5.0</span>
-              <span>DLF 1.62</span>
-              <span className="text-orange-700 font-extrabold">RESONANCE</span>
-            </div>
-          </div>
-
-          {/* Timeline Section */}
-          <div className="p-6 border-b border-[#b8ceb1]">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[#3f6333]">SRI TIMELINE</span>
-              <span className="text-[#3f6333] normal-case">last 90s · forecast</span>
-            </div>
-            
-            <div className="flex items-end gap-1 h-16 mb-2">
-              {[20, 25, 20, 30, 45, 50, 60, 75, 80, 95].map((val, i) => {
-                const isRed = val >= 75;
-                const isOrange = val >= 60 && !isRed;
-                const isYellow = val >= 45 && !isOrange && !isRed;
-                let bg = 'bg-green-600';
-                if (isYellow) bg = 'bg-yellow-500';
-                if (isOrange) bg = 'bg-orange-500';
-                if (isRed) bg = 'bg-red-600';
-                return (
-                  <div key={i} className={`flex-1 ${bg}`} style={{ height: `${val}%` }}></div>
-                );
-              })}
-              {[95, 95, 90, 80].map((val, i) => (
-                <div key={`f-${i}`} className="flex-1 bg-transparent border-2 border-dashed border-[#8fa888]" style={{ height: `${val}%` }}></div>
-              ))}
-            </div>
-            
-            <div className="flex justify-between text-[#3f6333] text-[9px] normal-case font-bold">
-              <span>-90s</span>
-              <span>now</span>
-              <span>+forecast</span>
-            </div>
-          </div>
-
-          {/* Crowd State & Incident Log */}
-          <div className="p-6 flex-1 flex flex-col">
-            <div className="flex items-center gap-4 mb-8">
-              <span className="text-[#3f6333]">CROWD STATE</span>
-              <span className="bg-red-100 text-red-700 border-2 border-red-200 px-2 py-0.5 rounded font-extrabold">{amData?.dynamics_state?.state || 'AGGRESSIVE'}</span>
-              <span className="text-[#3f6333] normal-case">conf 0.77</span>
-            </div>
-
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[#3f6333]">INCIDENT LOG</span>
-              <span className="text-red-700 font-extrabold">3 ACTIVE</span>
-            </div>
-
-            <div className="space-y-4 flex-1 overflow-y-auto pr-2 normal-case tracking-normal text-xs">
-              <div className="border-l-4 border-red-600 pl-3">
-                <div className="flex justify-between mb-1 uppercase tracking-widest text-[10px]">
-                  <span className="text-red-700 font-extrabold">20:46:58</span>
-                  <span className="text-red-700 font-extrabold">CRITICAL</span>
-                </div>
-                <div className="text-black font-extrabold mb-1">{activeZone?.name} · SRI crossed 76 · halt entry</div>
-                <div className="text-[#2d4a22]">snap: density {amData?.density || 8.1} · pressure 0.92</div>
-              </div>
-              
-              <div className="border-l-4 border-orange-500 pl-3">
-                <div className="flex justify-between mb-1 uppercase tracking-widest text-[10px]">
-                  <span className="text-orange-700 font-extrabold">20:46:41</span>
-                  <span className="text-orange-700 font-extrabold">WARN</span>
-                </div>
-                <div className="text-black font-extrabold mb-1">Structural DLF 1.62 · resonance near</div>
-                <div className="text-[#2d4a22]">snap: load {amData?.structural_load_pct || 84}% · freq 2.1Hz</div>
-              </div>
-
-              <div className="border-l-4 border-orange-500 pl-3">
-                <div className="flex justify-between mb-1 uppercase tracking-widest text-[10px]">
-                  <span className="text-orange-700 font-extrabold">20:46:20</span>
-                  <span className="text-orange-700 font-extrabold">WARN</span>
-                </div>
-                <div className="text-black font-extrabold mb-1">Zone C · gate flow -34%/min</div>
-                <div className="text-[#2d4a22]">snap: bottleneck 210 p/min</div>
-              </div>
-              
-              <div className="border-l-4 border-yellow-500 pl-3">
-                <div className="flex justify-between mb-1 uppercase tracking-widest text-[10px]">
-                  <span className="text-yellow-700 font-extrabold">20:45:52</span>
-                  <span className="text-yellow-700 font-extrabold">ADVISORY</span>
-                </div>
-                <div className="text-black font-extrabold mb-1">Zone D · queue disorder rising</div>
-                <div className="text-[#2d4a22]">snap: disorder 0.41</div>
-              </div>
-            </div>
-          </div>
-        </aside>
+          {/* Detail Panel */}
+          {activeZone && activeMonitor && (
+            <ZoneDetailPanel zone={activeZone} monitor={activeMonitor} activeTab={activeTab} />
+          )}
+        </div>
       </div>
 
       {/* FOOTER */}
-      <footer className="h-8 border-t border-[#b8ceb1] bg-[#deedd9] flex items-center px-4 text-[#3f6333] gap-4 normal-case tracking-normal">
+      <footer className="h-7 border-t border-[#b8ceb1] bg-[#deedd9] flex items-center px-4 text-[#3f6333] gap-4 normal-case tracking-normal text-[10px]">
         <span className="text-green-700 uppercase font-extrabold tracking-widest">AGGREGATE ONLY</span>
-        <span className="font-bold">No facial recognition · ephemeral IDs only · Zone history active · Consent signage active at all gates</span>
+        <span className="font-bold">No facial recognition · ephemeral IDs only · Zone history active · Consent signage at all gates</span>
       </footer>
     </div>
   );

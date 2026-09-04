@@ -218,11 +218,11 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
   const severityColor = { LOW: 'text-green-700 bg-green-100 border-green-300', MEDIUM: 'text-yellow-700 bg-yellow-100 border-yellow-300', HIGH: 'text-orange-700 bg-orange-100 border-orange-300', CRITICAL: 'text-red-700 bg-red-100 border-red-300' };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden gap-3 p-3 bg-[#d6e8d0]">
       {/* Top: Feed + Zone Info side by side */}
-      <div className="flex gap-0 border-b border-[#b8ceb1]" style={{ minHeight: '260px' }}>
+      <div className="flex gap-3 rounded-xl overflow-hidden" style={{ minHeight: '250px' }}>
         {/* Camera Feed */}
-        <div className="relative w-1/2 bg-black flex-shrink-0">
+        <div className="relative flex-1 bg-black rounded-xl overflow-hidden">
           {src ? (
             <img src={src} className="w-full h-full object-cover" alt="feed"/>
           ) : (
@@ -240,7 +240,7 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         </div>
         
         {/* Zone Info */}
-        <div className="w-1/2 p-4 bg-[#e5f2e0] overflow-y-auto">
+        <div className="w-[320px] flex-shrink-0 p-4 bg-[#e5f2e0] rounded-xl overflow-y-auto">
           <div className="text-[#1a3314] text-[12px] mb-3">ZONE INFORMATION</div>
           <table className="w-full text-[13px] normal-case tracking-normal">
             <tbody>
@@ -274,10 +274,10 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
       </div>
 
       {/* Bottom: 3-column detail sections */}
-      <div className="flex-1 grid grid-cols-3 gap-0 overflow-hidden">
+      <div className="flex-1 grid grid-cols-3 gap-3 overflow-hidden min-h-0">
         
         {/* Column 1: Crowd Movement Type */}
-        <div className="p-4 border-r border-[#b8ceb1] overflow-y-auto bg-[#deedd9]">
+        <div className="p-4 overflow-y-auto bg-[#e5f2e0] rounded-xl">
           <div className="text-[#1a3314] text-[12px] mb-3">CROWD MOVEMENT TYPE</div>
           <div className="bg-white/60 rounded-lg p-3 border border-[#b8ceb1] mb-3">
             <div className="text-black font-extrabold text-sm mb-1 normal-case">{movement.type}</div>
@@ -305,7 +305,7 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         </div>
 
         {/* Column 2: Possible Disasters */}
-        <div className="p-4 border-r border-[#b8ceb1] overflow-y-auto bg-[#deedd9]">
+        <div className="p-4 overflow-y-auto bg-[#e5f2e0] rounded-xl">
           <div className="text-[#1a3314] text-[12px] mb-3">POSSIBLE DISASTERS</div>
           <div className="space-y-2">
             {disasters.map((d, i) => (
@@ -321,7 +321,7 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         </div>
 
         {/* Column 3: Recommended Actions */}
-        <div className="p-4 overflow-y-auto bg-[#deedd9]">
+        <div className="p-4 overflow-y-auto bg-[#e5f2e0] rounded-xl">
           <div className="text-[#1a3314] text-[12px] mb-3">RECOMMENDED ACTIONS</div>
           <div className="space-y-2">
             {actions.map((action, i) => (
@@ -453,11 +453,11 @@ export default function OperatorConsole() {
       </header>
 
       {/* MAIN LAYOUT */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden gap-3 p-3 pt-0">
         
         {/* LEFT: SCROLLABLE ZONE CARDS */}
-        <aside className="w-[260px] flex flex-col border-r border-[#b8ceb1] bg-[#d1e2cb]">
-          <div className="p-3 border-b border-[#b8ceb1] text-[#1a3314] flex justify-between items-center">
+        <aside className="w-[260px] flex flex-col bg-[#d1e2cb] rounded-2xl overflow-hidden flex-shrink-0">
+          <div className="p-3 border-b border-[#b8ceb1] text-[#1a3314] flex justify-between items-center rounded-t-2xl bg-[#c2d9bb]">
             <span>ZONE CARDS</span>
             <span className="text-black font-extrabold">{zones.length}</span>
           </div>
@@ -475,7 +475,7 @@ export default function OperatorConsole() {
         </aside>
 
         {/* CENTER + RIGHT: DETAIL VIEW */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#d6e8d0] rounded-2xl overflow-hidden">
           {/* Tabs */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
             <div className="flex items-center gap-3">

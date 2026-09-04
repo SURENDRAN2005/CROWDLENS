@@ -165,19 +165,19 @@ function ZoneCard({ zone, monitor, isActive, onClick }) {
         {src ? (
           <img src={src} className="w-full h-full object-cover opacity-90" alt="feed"/>
         ) : (
-          <div className="flex items-center justify-center h-full text-[#555] text-[10px]">
+          <div className="flex items-center justify-center h-full text-[#555] text-[12px]">
             <div className="w-3 h-3 border-2 border-[#555] border-t-transparent rounded-full animate-spin mr-2"></div>
             CONNECTING
           </div>
         )}
         {/* Overlay badges */}
         <div className="absolute top-2 left-2 flex gap-1.5">
-          <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-1.5 py-0.5 text-[9px] text-black font-extrabold rounded">{zone.name}</span>
-          <span className={`${sc.bg} ${sc.text} border ${sc.border} px-1.5 py-0.5 text-[9px] font-extrabold rounded`}>{zone.status}</span>
+          <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-1.5 py-0.5 text-[13px] text-black font-extrabold rounded">{zone.name}</span>
+          <span className={`${sc.bg} ${sc.text} border ${sc.border} px-1.5 py-0.5 text-[13px] font-extrabold rounded`}>{zone.status}</span>
         </div>
         {monitor.connected && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>}
         {/* Density overlay */}
-        <div className="absolute bottom-2 left-2 bg-black/70 text-white px-1.5 py-0.5 rounded text-[9px] font-bold">
+        <div className="absolute bottom-2 left-2 bg-black/70 text-white px-1.5 py-0.5 rounded text-[13px] font-extrabold">
           {metrics?.density?.toFixed(1) || '0.0'} ppm²
         </div>
       </div>
@@ -186,11 +186,11 @@ function ZoneCard({ zone, monitor, isActive, onClick }) {
       <div className="p-3">
         <div className="flex justify-between items-center mb-2">
           <div>
-            <div className="text-black font-extrabold text-xs">{zone.name}</div>
+            <div className="text-black font-extrabold text-sm">{zone.name}</div>
           </div>
           <div className="text-right">
             <div className="text-black font-extrabold text-sm">{headcount}</div>
-            <div className="text-[#3f6333] text-[9px]">/{zone.capacity}</div>
+            <div className="text-[#1a3314] text-[13px]">/{zone.capacity}</div>
           </div>
         </div>
         {/* Occupancy bar */}
@@ -198,7 +198,7 @@ function ZoneCard({ zone, monitor, isActive, onClick }) {
           <div className={`h-full transition-all duration-300 rounded ${occupancy > 90 ? 'bg-red-600' : occupancy > 70 ? 'bg-orange-500' : occupancy > 50 ? 'bg-yellow-500' : 'bg-green-600'}`}
             style={{ width: `${occupancy}%` }}></div>
         </div>
-        <div className="text-[9px] text-[#3f6333] mt-1">{occupancy}% capacity · {zone.area_m2}m²</div>
+        <div className="text-[13px] text-[#1a3314] mt-1">{occupancy}% capacity · {zone.area_m2}m²</div>
       </div>
     </div>
   );
@@ -229,10 +229,10 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
             <div className="flex items-center justify-center h-full text-[#555]">CONNECTING...</div>
           )}
           <div className="absolute top-3 left-3 flex gap-2">
-            <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-2 py-1 text-[10px] text-black font-extrabold rounded">{zone.name}</span>
-            <span className={`${sc.bg} ${sc.text} border ${sc.border} px-2 py-1 text-[10px] font-extrabold rounded`}>{zone.status}</span>
+            <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-2 py-1 text-[12px] text-black font-extrabold rounded">{zone.name}</span>
+            <span className={`${sc.bg} ${sc.text} border ${sc.border} px-2 py-1 text-[12px] font-extrabold rounded`}>{zone.status}</span>
           </div>
-          <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white px-2 py-1 rounded text-[10px] flex justify-between font-bold">
+          <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white px-2 py-1 rounded text-[12px] flex justify-between font-extrabold">
             <span>{metrics?.density?.toFixed(1) || '0.0'} ppm²</span>
             <span>SRI {Math.round(metrics?.sri || 0)}</span>
             <span>{headcount} people</span>
@@ -241,19 +241,19 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         
         {/* Zone Info */}
         <div className="w-1/2 p-4 bg-[#e5f2e0] overflow-y-auto">
-          <div className="text-[#3f6333] text-[10px] mb-3">ZONE INFORMATION</div>
-          <table className="w-full text-[11px] normal-case tracking-normal">
+          <div className="text-[#1a3314] text-[12px] mb-3">ZONE INFORMATION</div>
+          <table className="w-full text-[13px] normal-case tracking-normal">
             <tbody>
               <tr className="border-b border-[#b8ceb1]">
-                <td className="py-2 text-[#3f6333] font-bold pr-3">Area Size</td>
+                <td className="py-2 text-[#1a3314] font-extrabold pr-3">Area Size</td>
                 <td className="py-2 text-black font-extrabold">{zone.area_m2} m²</td>
               </tr>
               <tr className="border-b border-[#b8ceb1]">
-                <td className="py-2 text-[#3f6333] font-bold pr-3">Max Capacity</td>
+                <td className="py-2 text-[#1a3314] font-extrabold pr-3">Max Capacity</td>
                 <td className="py-2 text-black font-extrabold">{zone.capacity} persons</td>
               </tr>
               <tr className="border-b border-[#b8ceb1]">
-                <td className="py-2 text-[#3f6333] font-bold pr-3">Current Count</td>
+                <td className="py-2 text-[#1a3314] font-extrabold pr-3">Current Count</td>
                 <td className="py-2">
                   <span className={`font-extrabold ${occupancy > 90 ? 'text-red-700' : occupancy > 70 ? 'text-orange-700' : 'text-black'}`}>
                     {headcount} ({occupancy}%)
@@ -261,11 +261,11 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
                 </td>
               </tr>
               <tr className="border-b border-[#b8ceb1]">
-                <td className="py-2 text-[#3f6333] font-bold pr-3">Density</td>
+                <td className="py-2 text-[#1a3314] font-extrabold pr-3">Density</td>
                 <td className="py-2 text-black font-extrabold">{metrics?.density?.toFixed(2) || '—'} ppm²</td>
               </tr>
               <tr>
-                <td className="py-2 text-[#3f6333] font-bold pr-3">Struct. Load</td>
+                <td className="py-2 text-[#1a3314] font-extrabold pr-3">Struct. Load</td>
                 <td className="py-2 text-black font-extrabold">{metrics?.structural_load_pct || '—'}%</td>
               </tr>
             </tbody>
@@ -278,43 +278,43 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
         
         {/* Column 1: Crowd Movement Type */}
         <div className="p-4 border-r border-[#b8ceb1] overflow-y-auto bg-[#deedd9]">
-          <div className="text-[#3f6333] text-[10px] mb-3">CROWD MOVEMENT TYPE</div>
+          <div className="text-[#1a3314] text-[12px] mb-3">CROWD MOVEMENT TYPE</div>
           <div className="bg-white/60 rounded-lg p-3 border border-[#b8ceb1] mb-3">
             <div className="text-black font-extrabold text-sm mb-1 normal-case">{movement.type}</div>
-            <div className="text-[#2d4a22] text-[10px] normal-case tracking-normal leading-relaxed">{movement.desc}</div>
+            <div className="text-[#0f2209] text-[12px] normal-case tracking-normal leading-relaxed">{movement.desc}</div>
           </div>
-          <div className="text-[#3f6333] text-[10px] mb-2">DYNAMICS STATE</div>
+          <div className="text-[#1a3314] text-[12px] mb-2">DYNAMICS STATE</div>
           <div className="flex items-center gap-2 mb-2">
-            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${severityColor[metrics?.dynamics_state?.severity || 'LOW']}`}>
+            <span className={`px-2 py-0.5 rounded text-[12px] font-extrabold border ${severityColor[metrics?.dynamics_state?.severity || 'LOW']}`}>
               {metrics?.dynamics_state?.state || 'PASSIVE'}
             </span>
-            <span className="text-[#3f6333] text-[9px] normal-case">sev: {metrics?.dynamics_state?.severity || 'LOW'}</span>
+            <span className="text-[#1a3314] text-[13px] normal-case">sev: {metrics?.dynamics_state?.severity || 'LOW'}</span>
           </div>
-          <div className="text-[#2d4a22] text-[10px] normal-case tracking-normal leading-relaxed">
+          <div className="text-[#0f2209] text-[12px] normal-case tracking-normal leading-relaxed">
             {metrics?.dynamics_state?.definition || 'Awaiting classification...'}
           </div>
-          <div className="mt-3 text-[#3f6333] text-[10px] mb-1">VISUAL BIOMARKERS</div>
-          <div className="text-[#2d4a22] text-[10px] normal-case tracking-normal italic">
+          <div className="mt-3 text-[#1a3314] text-[12px] mb-1">VISUAL BIOMARKERS</div>
+          <div className="text-[#0f2209] text-[12px] normal-case tracking-normal italic">
             {metrics?.dynamics_state?.visual_biomarkers || '—'}
           </div>
-          <div className="mt-3 text-[#3f6333] text-[10px] mb-1">EVENT ARCHETYPE</div>
-          <div className="text-black font-extrabold text-xs normal-case">
+          <div className="mt-3 text-[#1a3314] text-[12px] mb-1">EVENT ARCHETYPE</div>
+          <div className="text-black font-extrabold text-sm normal-case">
             {metrics?.event_archetype?.emoji || '👥'} {metrics?.event_archetype?.name || 'Detecting...'}
-            <span className="text-green-700 text-[9px] ml-1">conf {metrics?.event_archetype?.confidence || '—'}</span>
+            <span className="text-green-700 text-[13px] ml-1">conf {metrics?.event_archetype?.confidence || '—'}</span>
           </div>
         </div>
 
         {/* Column 2: Possible Disasters */}
         <div className="p-4 border-r border-[#b8ceb1] overflow-y-auto bg-[#deedd9]">
-          <div className="text-[#3f6333] text-[10px] mb-3">POSSIBLE DISASTERS</div>
+          <div className="text-[#1a3314] text-[12px] mb-3">POSSIBLE DISASTERS</div>
           <div className="space-y-2">
             {disasters.map((d, i) => (
               <div key={i} className={`rounded-lg p-3 border ${severityColor[d.severity]} bg-opacity-50`}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="font-extrabold text-xs normal-case">{d.name}</span>
-                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${severityColor[d.severity]}`}>{d.severity}</span>
+                  <span className="font-extrabold text-sm normal-case">{d.name}</span>
+                  <span className={`text-[13px] font-extrabold px-1.5 py-0.5 rounded ${severityColor[d.severity]}`}>{d.severity}</span>
                 </div>
-                <div className="text-[10px] normal-case tracking-normal leading-relaxed opacity-80">{d.desc}</div>
+                <div className="text-[12px] normal-case tracking-normal leading-relaxed opacity-80">{d.desc}</div>
               </div>
             ))}
           </div>
@@ -322,25 +322,25 @@ function ZoneDetailPanel({ zone, monitor, activeTab }) {
 
         {/* Column 3: Recommended Actions */}
         <div className="p-4 overflow-y-auto bg-[#deedd9]">
-          <div className="text-[#3f6333] text-[10px] mb-3">RECOMMENDED ACTIONS</div>
+          <div className="text-[#1a3314] text-[12px] mb-3">RECOMMENDED ACTIONS</div>
           <div className="space-y-2">
             {actions.map((action, i) => (
-              <div key={i} className="bg-white/60 rounded-lg px-3 py-2 border border-[#b8ceb1] text-[11px] text-black font-bold normal-case tracking-normal leading-relaxed">
+              <div key={i} className="bg-white/60 rounded-lg px-3 py-2 border border-[#b8ceb1] text-[13px] text-black font-extrabold normal-case tracking-normal leading-relaxed">
                 {action}
               </div>
             ))}
           </div>
           {/* Threshold gauge */}
           <div className="mt-4 bg-white/60 rounded-lg p-3 border border-[#b8ceb1]">
-            <div className="text-[#3f6333] text-[9px] mb-2">THRESHOLD PROXIMITY</div>
+            <div className="text-[#1a3314] text-[13px] mb-2">THRESHOLD PROXIMITY</div>
             <div className="flex items-center gap-2 mb-1">
               <div className="flex-1 h-2 bg-[#b8ceb1] rounded overflow-hidden">
                 <div className={`h-full rounded transition-all duration-500 ${(metrics?.sri || 0) > 76 ? 'bg-red-600' : (metrics?.sri || 0) > 56 ? 'bg-orange-500' : (metrics?.sri || 0) > 30 ? 'bg-yellow-500' : 'bg-green-600'}`}
                   style={{ width: `${Math.min(100, metrics?.sri || 0)}%` }}></div>
               </div>
-              <span className="text-black font-extrabold text-xs min-w-[35px] text-right">{Math.round(metrics?.sri || 0)}%</span>
+              <span className="text-black font-extrabold text-sm min-w-[35px] text-right">{Math.round(metrics?.sri || 0)}%</span>
             </div>
-            <div className="flex justify-between text-[8px] text-[#3f6333]">
+            <div className="flex justify-between text-[8px] text-[#1a3314]">
               <span>SAFE</span>
               <span>CAUTION</span>
               <span>VOLATILE</span>
@@ -425,16 +425,16 @@ export default function OperatorConsole() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#deedd9] text-[#111827] font-mono text-[11px] uppercase overflow-hidden select-none font-bold">
+    <div className="flex flex-col h-screen bg-[#deedd9] text-[#0a0f0a] font-mono text-[13px] uppercase overflow-hidden select-none font-extrabold">
       
       {/* HEADER */}
       <header className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-red-600"></div>
           <span className="text-black tracking-widest text-sm font-extrabold">CROWDLENS</span>
-          <span className="text-[#2d4a22]">OPERATOR CONSOLE v0.9</span>
+          <span className="text-[#0f2209]">OPERATOR CONSOLE v0.9</span>
         </div>
-        <div className="flex items-center gap-4 text-[#2d4a22]">
+        <div className="flex items-center gap-4 text-[#0f2209]">
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse"></div>
             <span>FEED {String(zones.length).padStart(2, '0')} LIVE</span>
@@ -448,7 +448,7 @@ export default function OperatorConsole() {
             )}
           </button>
           <input ref={fileInputRef} type="file" accept="video/*" onChange={handleUpload} className="hidden"/>
-          <div className="text-[#b45309] font-extrabold">{currentTime} <span className="text-[#3f6333]">IST</span></div>
+          <div className="text-[#b45309] font-extrabold">{currentTime} <span className="text-[#1a3314]">IST</span></div>
         </div>
       </header>
 
@@ -457,7 +457,7 @@ export default function OperatorConsole() {
         
         {/* LEFT: SCROLLABLE ZONE CARDS */}
         <aside className="w-[260px] flex flex-col border-r border-[#b8ceb1] bg-[#d1e2cb]">
-          <div className="p-3 border-b border-[#b8ceb1] text-[#3f6333] flex justify-between items-center">
+          <div className="p-3 border-b border-[#b8ceb1] text-[#1a3314] flex justify-between items-center">
             <span>ZONE CARDS</span>
             <span className="text-black font-extrabold">{zones.length}</span>
           </div>
@@ -479,13 +479,13 @@ export default function OperatorConsole() {
           {/* Tabs */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
             <div className="flex items-center gap-3">
-              <span className="text-[#3f6333]">ZONE DETAIL</span>
+              <span className="text-[#1a3314]">ZONE DETAIL</span>
               <span className="text-black font-extrabold">{activeZone?.name}</span>
             </div>
             <div className="flex gap-4">
               {['DENSITY', 'TURBULENCE', 'RISK'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)}
-                  className={`${activeTab === tab ? 'text-black border-b-2 border-black' : 'text-[#3f6333] hover:text-black'} pb-1 transition-colors font-extrabold`}>
+                  className={`${activeTab === tab ? 'text-black border-b-2 border-black' : 'text-[#1a3314] hover:text-black'} pb-1 transition-colors font-extrabold`}>
                   {tab}
                 </button>
               ))}

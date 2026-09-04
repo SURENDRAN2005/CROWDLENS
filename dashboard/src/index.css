@@ -3,15 +3,16 @@
 
 html, body {
   background-color: #deedd9; /* Light Sage Green */
-  color: #111827; /* Dark Charcoal */
+  color: #0a0f0a; /* Near-black for maximum contrast */
   font-family: 'JetBrains Mono', monospace;
-  font-weight: 700; /* Bold font everywhere */
+  font-weight: 800; /* Extra-bold everywhere */
   margin: 0;
   padding: 0;
   height: 100vh;
   overflow: hidden;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
 #root {

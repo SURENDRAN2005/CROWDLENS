@@ -110,28 +110,39 @@ function getRecommendedActions(metrics, zone) {
 }
 
 /* ========== WebSocket Hook ========== */
-function useZoneMonitor(zone) {
+function useZoneMonitor(zone, zoneIndex = 0) {
   const [data, setData] = useState(null);
   const [connected, setConnected] = useState(false);
   const ws = useRef(null);
 
   useEffect(() => {
     if (!zone) return;
-    ws.current = new WebSocket('ws://localhost:8000/ws/analyze');
-    ws.current.onopen = () => {
-      setConnected(true);
-      ws.current.send(JSON.stringify({ video_filename: zone.video }));
+    // Stagger connections: each zone waits (index * 800ms) before connecting.
+    // This prevents all 6 zones from hitting the backend simultaneously.
+    const delay = zoneIndex * 800;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      ws.current = new WebSocket('ws://localhost:8000/ws/analyze');
+      ws.current.onopen = () => {
+        setConnected(true);
+        ws.current.send(JSON.stringify({ video_filename: zone.video }));
+      };
+      ws.current.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'update') setData(msg);
+        } catch (e) { console.error("Parse error", e); }
+      };
+      ws.current.onclose = () => setConnected(false);
+      ws.current.onerror = () => setConnected(false);
+    }, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (ws.current) ws.current.close();
     };
-    ws.current.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'update') setData(msg);
-      } catch (e) { console.error("Parse error", e); }
-    };
-    ws.current.onclose = () => setConnected(false);
-    ws.current.onerror = () => setConnected(false);
-    return () => { if (ws.current) ws.current.close(); };
-  }, [zone?.id, zone?.video]);
+  }, [zone?.id, zone?.video, zoneIndex]);
 
   return { data, connected };
 }
@@ -361,15 +372,15 @@ export default function OperatorConsole() {
 
   const activeZone = zones.find(z => z.id === activeZoneId);
 
-  // Monitors for up to 8 zones
-  const m0 = useZoneMonitor(zones[0]);
-  const m1 = useZoneMonitor(zones[1]);
-  const m2 = useZoneMonitor(zones[2]);
-  const m3 = useZoneMonitor(zones[3]);
-  const m4 = useZoneMonitor(zones[4]);
-  const m5 = useZoneMonitor(zones[5]);
-  const m6 = useZoneMonitor(zones[6] || null);
-  const m7 = useZoneMonitor(zones[7] || null);
+  // Monitors for up to 8 zones — staggered by index to avoid simultaneous connection burst
+  const m0 = useZoneMonitor(zones[0], 0);
+  const m1 = useZoneMonitor(zones[1], 1);
+  const m2 = useZoneMonitor(zones[2], 2);
+  const m3 = useZoneMonitor(zones[3], 3);
+  const m4 = useZoneMonitor(zones[4], 4);
+  const m5 = useZoneMonitor(zones[5], 5);
+  const m6 = useZoneMonitor(zones[6] || null, 6);
+  const m7 = useZoneMonitor(zones[7] || null, 7);
   const allMonitors = [m0, m1, m2, m3, m4, m5, m6, m7];
   const monitors = allMonitors.slice(0, zones.length);
 

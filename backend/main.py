@@ -24,6 +24,10 @@ flow_analyzer = None
 sri_engine = None
 structural_monitor = None
 
+# Limit concurrent heavy ML inference to avoid CPU saturation when many zones connect
+# With semaphore=2, only 2 zones run YOLO at any moment; others yield the event loop
+inference_semaphore = asyncio.Semaphore(2)
+
 def init_models():
     global detector, flow_analyzer, sri_engine, structural_monitor
     if detector is None:
@@ -97,15 +101,20 @@ async def websocket_endpoint(websocket: WebSocket):
             ret, frame = cap.read()
             if not ret:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                # Yield event loop so other connections can progress when looping
+                await asyncio.sleep(0.01)
                 continue
                 
             frame_count += 1
             if frame_count % frame_interval != 0:
+                # Yield event loop frequently so other zones get CPU time
+                await asyncio.sleep(0)
                 continue
                 
             # Define a helper to run all heavy CPU-bound OpenCV/ML operations
             def process_frame_sync(f):
-                f = cv2.resize(f, (1280, 720))
+                # 640x360 is 4x fewer pixels than 1280x720 → ~4x faster YOLO inference
+                f = cv2.resize(f, (640, 360))
                 
                 # --- 1. Detection ---
                 boxes, confidences, fallen_flags = detector.detect(f)
@@ -161,10 +170,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 heatmap_color = cv2.applyColorMap(heatmap_norm, cv2.COLORMAP_INFERNO)
                 frame_heatmap = cv2.addWeighted(f, 0.4, heatmap_color, 0.6, 0)
                 
-                # --- 7. Encode Frames ---
-                _, buffer_yolo = cv2.imencode('.jpg', f, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                # --- 7. Encode Frames (quality=50 reduces payload size ~30%) ---
+                _, buffer_yolo = cv2.imencode('.jpg', f, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 frame_yolo_b64 = base64.b64encode(buffer_yolo).decode('utf-8')
-                _, buffer_heat = cv2.imencode('.jpg', frame_heatmap, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                _, buffer_heat = cv2.imencode('.jpg', frame_heatmap, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 frame_heat_b64 = base64.b64encode(buffer_heat).decode('utf-8')
                 
                 return {
@@ -188,8 +197,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     }
                 }
                 
-            # Run the heavy processing in a threadpool
-            result = await asyncio.to_thread(process_frame_sync, frame)
+            # Acquire semaphore so max 2 zones run heavy inference simultaneously
+            async with inference_semaphore:
+                result = await asyncio.to_thread(process_frame_sync, frame)
             
             payload = {
                 "type": "update",

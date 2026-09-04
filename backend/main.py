@@ -5,7 +5,7 @@ import json
 import time
 import os
 import sys
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 
 # Add the parent directory to the path so we can import from ml
@@ -53,6 +53,18 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"status": "CrowdLens Backend Running"}
+
+import shutil
+
+@app.post("/upload")
+async def upload_video(file: UploadFile = File(...)):
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    videos_dir = os.path.join(base_dir, "data", "videos")
+    os.makedirs(videos_dir, exist_ok=True)
+    dest = os.path.join(videos_dir, file.filename)
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    return {"filename": file.filename, "status": "uploaded"}
 
 @app.websocket("/ws/analyze")
 async def websocket_endpoint(websocket: WebSocket):

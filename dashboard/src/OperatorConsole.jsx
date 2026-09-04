@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, AlertTriangle, MapPin, Activity, ShieldAlert } from 'lucide-react';
 
-const ZONES = [
+const INITIAL_ZONES = [
   { id: 'zone-a', name: 'Zone A', desc: 'Bridge Approach N', video: 'crowd10.mp4', status: 'RED' },
   { id: 'zone-b', name: 'Zone B', desc: 'Central Deck', video: 'crowd5.mp4', status: 'BLACK' },
   { id: 'zone-c', name: 'Zone C', desc: 'North Exit Gate', video: 'crowd1.mp4', status: 'ORANGE' },
   { id: 'zone-d', name: 'Zone D', desc: 'Queue Terminal', video: 'crowd16.mp4', status: 'YELLOW' },
   { id: 'zone-e', name: 'Zone E', desc: 'South Landing', video: 'crowd2.mp4', status: 'GREEN' },
+  { id: 'zone-f', name: 'Zone F', desc: 'East Corridor', video: 'crowd3.mp4', status: 'GREEN' },
 ];
 
 const COLORS = {
@@ -17,47 +17,112 @@ const COLORS = {
   GREEN: 'text-green-700 font-extrabold'
 };
 
+/* ---------- WebSocket Hook ---------- */
 function useZoneMonitor(zone) {
   const [data, setData] = useState(null);
   const [connected, setConnected] = useState(false);
   const ws = useRef(null);
+  const zoneRef = useRef(zone);
+
+  useEffect(() => {
+    zoneRef.current = zone;
+  }, [zone]);
 
   useEffect(() => {
     if (!zone) return;
-    ws.current = new WebSocket('ws://localhost:8000/ws/analyze');
     
-    ws.current.onopen = () => {
-      setConnected(true);
-      ws.current.send(JSON.stringify({ video_filename: zone.video }));
-    };
-    
-    ws.current.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'update') {
-          setData(msg);
+    const connect = () => {
+      ws.current = new WebSocket('ws://localhost:8000/ws/analyze');
+      
+      ws.current.onopen = () => {
+        setConnected(true);
+        ws.current.send(JSON.stringify({ video_filename: zoneRef.current.video }));
+      };
+      
+      ws.current.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'update') {
+            setData(msg);
+          }
+        } catch (e) {
+          console.error("Parse error", e);
         }
-      } catch (e) {
-        console.error("Parse error", e);
-      }
+      };
+
+      ws.current.onclose = () => {
+        setConnected(false);
+      };
+
+      ws.current.onerror = () => {
+        setConnected(false);
+      };
     };
 
-    ws.current.onclose = () => setConnected(false);
+    connect();
 
     return () => {
       if (ws.current) {
         ws.current.close();
       }
     };
-  }, [zone]);
+  }, [zone?.id, zone?.video]);
 
   return { data, connected };
 }
 
+/* ---------- Camera Card Component ---------- */
+function CameraCard({ zone, monitor, activeTab, isActive, onClick }) {
+  const src = activeTab === 'TURBULENCE' || activeTab === 'RISK' 
+    ? monitor.data?.frame_heatmap 
+    : monitor.data?.frame;
+  const pressureText = monitor.data?.metrics?.tension > 5 ? 'pressure rising' : 'queue forming';
+  const density = monitor.data?.metrics?.density || '0.0';
+
+  return (
+    <div 
+      onClick={onClick}
+      className={`relative bg-black flex flex-col overflow-hidden group cursor-pointer min-h-[280px] ${isActive ? 'ring-2 ring-black' : ''}`}
+    >
+      {/* Video Fill */}
+      <div className="absolute inset-0 flex items-center justify-center bg-black">
+        {src ? (
+          <img src={src} className="w-full h-full object-cover opacity-90" alt="feed"/>
+        ) : (
+          <div className="text-[#555] flex flex-col items-center gap-2">
+            <div className="w-4 h-4 border-2 border-[#555] border-t-transparent rounded-full animate-spin"></div>
+            <span>CONNECTING...</span>
+          </div>
+        )}
+      </div>
+      
+      {/* Grid overlay */}
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '20% 20%' }}></div>
+
+      {/* Badges */}
+      <div className="absolute top-3 left-3 flex gap-2">
+        <div className="bg-[#deedd9] border border-[#b8ceb1] px-2 py-1 text-black font-extrabold text-[10px]">{zone.name}</div>
+        <div className={`bg-[#deedd9] border border-[#b8ceb1] px-2 py-1 text-[10px] ${COLORS[zone.status]?.replace('bg-black', '').replace('text-white', 'text-black') || 'text-black'} font-extrabold`}>{zone.status}</div>
+        {monitor.connected && <div className="bg-green-600 w-2 h-2 rounded-full mt-1.5 animate-pulse"></div>}
+      </div>
+
+      {/* Bottom Stats */}
+      <div className="absolute bottom-3 left-3 right-3 flex justify-between text-white bg-black/60 px-2 py-1 rounded text-[10px]">
+        <span className="font-extrabold">{density} ppm²</span>
+        <span className="normal-case font-bold">{pressureText}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main Console ---------- */
 export default function OperatorConsole() {
+  const [zones, setZones] = useState(INITIAL_ZONES);
   const [activeZoneId, setActiveZoneId] = useState('zone-b');
   const [activeTab, setActiveTab] = useState('DENSITY');
   const [currentTime, setCurrentTime] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   
   useEffect(() => {
     const timer = setInterval(() => {
@@ -67,17 +132,54 @@ export default function OperatorConsole() {
     return () => clearInterval(timer);
   }, []);
 
-  const activeZone = ZONES.find(z => z.id === activeZoneId);
-  const mosaicZones = ZONES.slice(0, 4);
-  
-  const m1 = useZoneMonitor(mosaicZones[0]);
-  const m2 = useZoneMonitor(mosaicZones[1]);
-  const m3 = useZoneMonitor(mosaicZones[2]);
-  const m4 = useZoneMonitor(mosaicZones[3]);
-  const monitors = [m1, m2, m3, m4];
+  const activeZone = zones.find(z => z.id === activeZoneId);
 
-  const activeMonitor = monitors.find((_, i) => mosaicZones[i].id === activeZoneId) || m2; 
-  const amData = activeMonitor.data?.metrics || {};
+  // Create monitors for ALL zones
+  const m0 = useZoneMonitor(zones[0]);
+  const m1 = useZoneMonitor(zones[1]);
+  const m2 = useZoneMonitor(zones[2]);
+  const m3 = useZoneMonitor(zones[3]);
+  const m4 = useZoneMonitor(zones[4]);
+  const m5 = useZoneMonitor(zones[5]);
+  const m6 = useZoneMonitor(zones[6] || null);
+  const m7 = useZoneMonitor(zones[7] || null);
+  const allMonitors = [m0, m1, m2, m3, m4, m5, m6, m7];
+  const monitors = allMonitors.slice(0, zones.length);
+
+  // Active monitor for Right Panel
+  const activeIdx = zones.findIndex(z => z.id === activeZoneId);
+  const activeMonitor = activeIdx >= 0 ? monitors[activeIdx] : monitors[0]; 
+  const amData = activeMonitor?.data?.metrics || {};
+
+  // Upload handler
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('http://localhost:8000/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.filename) {
+        const newId = `zone-${String.fromCharCode(97 + zones.length)}`;
+        const newZone = {
+          id: newId,
+          name: `Zone ${String.fromCharCode(65 + zones.length)}`,
+          desc: file.name.replace('.mp4', ''),
+          video: data.filename,
+          status: 'GREEN',
+        };
+        setZones(prev => [...prev, newZone]);
+        setActiveZoneId(newId);
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen bg-[#deedd9] text-[#111827] font-mono text-[11px] uppercase overflow-hidden select-none font-bold">
@@ -92,12 +194,43 @@ export default function OperatorConsole() {
         <div className="flex items-center gap-6 text-[#2d4a22]">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse"></div>
-            <span>FEED 04 LIVE</span>
+            <span>FEED {String(zones.length).padStart(2, '0')} LIVE</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-green-600"></div>
             <span>LINK 12ms</span>
           </div>
+
+          {/* UPLOAD BUTTON */}
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 bg-[#2d4a22] text-[#deedd9] px-3 py-1.5 rounded hover:bg-[#1a3314] transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {uploading ? (
+              <>
+                <div className="w-3 h-3 border-2 border-[#deedd9] border-t-transparent rounded-full animate-spin"></div>
+                <span>UPLOADING...</span>
+              </>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>UPLOAD VIDEO</span>
+              </>
+            )}
+          </button>
+          <input 
+            ref={fileInputRef}
+            type="file" 
+            accept="video/*" 
+            onChange={handleUpload}
+            className="hidden"
+          />
+
           <div className="text-[#b45309] min-w-[80px] text-right font-extrabold">{currentTime} <span className="text-[#3f6333]">IST</span></div>
           <div>OPERATOR - R. DESHMUKH</div>
         </div>
@@ -108,9 +241,12 @@ export default function OperatorConsole() {
         
         {/* LEFT PANEL - ZONE RAIL */}
         <aside className="w-[240px] flex flex-col border-r border-[#b8ceb1] bg-[#cbe1c4]">
-          <div className="p-4 border-b border-[#b8ceb1] text-[#3f6333]">ZONE RAIL</div>
+          <div className="p-4 border-b border-[#b8ceb1] text-[#3f6333] flex justify-between items-center">
+            <span>ZONE RAIL</span>
+            <span className="text-black font-extrabold">{zones.length}</span>
+          </div>
           <div className="flex-1 overflow-y-auto pt-2">
-            {ZONES.map(zone => (
+            {zones.map(zone => (
               <div 
                 key={zone.id}
                 onClick={() => setActiveZoneId(zone.id)}
@@ -118,7 +254,7 @@ export default function OperatorConsole() {
               >
                 <div>
                   <div className="text-black font-extrabold mb-1">{zone.name}</div>
-                  <div className="text-[#2d4a22] normal-case tracking-normal">{zone.desc}</div>
+                  <div className="text-[#2d4a22] normal-case tracking-normal text-[10px]">{zone.desc}</div>
                 </div>
                 <div className={`font-extrabold ${COLORS[zone.status] || 'text-[#2d4a22]'} ${zone.status === 'BLACK' && activeZoneId !== zone.id ? 'bg-transparent text-black' : ''}`}>
                   {zone.status}
@@ -136,10 +272,13 @@ export default function OperatorConsole() {
           </div>
         </aside>
 
-        {/* CENTER PANEL - CAMERA MOSAIC */}
+        {/* CENTER PANEL - SCROLLABLE CAMERA MOSAIC */}
         <main className="flex-1 flex flex-col min-w-0 bg-[#dbe8d6]">
           <div className="flex items-center justify-between px-4 py-2 border-b border-[#b8ceb1] bg-[#cbe1c4]">
-            <span className="text-[#3f6333]">CAMERA MOSAIC</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[#3f6333]">CAMERA MOSAIC</span>
+              <span className="text-black font-extrabold">{zones.length} FEEDS</span>
+            </div>
             <div className="flex gap-4">
               {['DENSITY', 'TURBULENCE', 'RISK'].map(tab => (
                 <button 
@@ -153,41 +292,24 @@ export default function OperatorConsole() {
             </div>
           </div>
           
-          <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-[2px] bg-[#b8ceb1]">
-            {monitors.map((m, idx) => {
-              const zone = mosaicZones[idx];
-              const src = activeTab === 'TURBULENCE' || activeTab === 'RISK' ? m.data?.frame_heatmap : m.data?.frame;
-              const pressureText = m.data?.metrics?.tension > 5 ? 'pressure rising' : 'queue forming';
-              
-              return (
-                <div key={idx} className="relative bg-black flex flex-col overflow-hidden group">
-                  {/* Video Fill (Black background makes screens visible) */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black">
-                    {src ? (
-                      <img src={src} className="w-full h-full object-cover opacity-90" alt="feed"/>
-                    ) : (
-                      <div className="text-[#555]">CONNECTING...</div>
-                    )}
-                  </div>
-                  
-                  {/* Grid overlay for aesthetics */}
-                  <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '20% 20%', opacity: 1 }}></div>
-
-                  {/* Badges (Light Theme) */}
-                  <div className="absolute top-4 left-4 flex gap-2">
-                    <div className="bg-[#deedd9] border border-[#b8ceb1] px-2 py-1 text-black font-extrabold">CAM 0{idx+1}</div>
-                    <div className={`bg-[#deedd9] border border-[#b8ceb1] px-2 py-1 ${COLORS[zone.status]?.replace('bg-black', '') || 'text-black'} font-extrabold`}>{zone.name}</div>
-                  </div>
-
-                  {/* Bottom Stats */}
-                  <div className="absolute bottom-4 left-4 flex gap-2 text-white bg-black/60 px-2 py-1 rounded">
-                    <span>{m.data?.metrics?.density || '0.0'} ppm²</span>
-                    <span>·</span>
-                    <span className="normal-case font-bold">{pressureText}</span>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Scrollable grid — 3 columns, auto rows */}
+          <div className="flex-1 overflow-y-auto p-[2px]">
+            <div className="grid grid-cols-3 gap-[2px] bg-[#b8ceb1]">
+              {monitors.map((m, idx) => {
+                const zone = zones[idx];
+                if (!zone) return null;
+                return (
+                  <CameraCard 
+                    key={zone.id}
+                    zone={zone}
+                    monitor={m}
+                    activeTab={activeTab}
+                    isActive={activeZoneId === zone.id}
+                    onClick={() => setActiveZoneId(zone.id)}
+                  />
+                );
+              })}
+            </div>
           </div>
         </main>
 
@@ -232,15 +354,12 @@ export default function OperatorConsole() {
               <span className="text-[#3f6333] normal-case">last 90s · forecast</span>
             </div>
             
-            {/* Mock Bar Chart matching the visual */}
             <div className="flex items-end gap-1 h-16 mb-2">
               {[20, 25, 20, 30, 45, 50, 60, 75, 80, 95].map((val, i) => {
                 const isRed = val >= 75;
                 const isOrange = val >= 60 && !isRed;
                 const isYellow = val >= 45 && !isOrange && !isRed;
-                const isGreen = !isRed && !isYellow && !isOrange;
-                let bg = 'bg-[#a1b89a]';
-                if (isGreen) bg = 'bg-green-600';
+                let bg = 'bg-green-600';
                 if (isYellow) bg = 'bg-yellow-500';
                 if (isOrange) bg = 'bg-orange-500';
                 if (isRed) bg = 'bg-red-600';
@@ -248,7 +367,6 @@ export default function OperatorConsole() {
                   <div key={i} className={`flex-1 ${bg}`} style={{ height: `${val}%` }}></div>
                 );
               })}
-              {/* Forecast bars */}
               {[95, 95, 90, 80].map((val, i) => (
                 <div key={`f-${i}`} className="flex-1 bg-transparent border-2 border-dashed border-[#8fa888]" style={{ height: `${val}%` }}></div>
               ))}

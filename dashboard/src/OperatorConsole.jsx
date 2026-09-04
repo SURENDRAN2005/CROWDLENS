@@ -148,7 +148,7 @@ function useZoneMonitor(zone, zoneIndex = 0) {
 }
 
 /* ========== ZONE CARD ========== */
-function ZoneCard({ zone, monitor, isActive, onClick }) {
+function ZoneCard({ zone, monitor, isActive, onClick, onDelete }) {
   const metrics = monitor.data?.metrics;
   const headcount = metrics?.headcount || 0;
   const occupancy = Math.min(100, Math.round((headcount / zone.capacity) * 100));
@@ -175,7 +175,14 @@ function ZoneCard({ zone, monitor, isActive, onClick }) {
           <span className="bg-[#deedd9]/90 border border-[#b8ceb1] px-1.5 py-0.5 text-[13px] text-black font-extrabold rounded">{zone.name}</span>
           <span className={`${sc.bg} ${sc.text} border ${sc.border} px-1.5 py-0.5 text-[13px] font-extrabold rounded`}>{zone.status}</span>
         </div>
-        {monitor.connected && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>}
+        {/* Delete button — top right */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(zone.id); }}
+          title="Remove zone"
+          className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center text-[14px] font-extrabold leading-none transition-colors cursor-pointer z-10"
+        >×</button>
+        {/* Live dot — hidden when delete button is showing, space taken by it */}
+        {monitor.connected && <div className="absolute bottom-2 right-2 w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>}
         {/* Density overlay */}
         <div className="absolute bottom-2 left-2 bg-black/70 text-white px-1.5 py-0.5 rounded text-[13px] font-extrabold">
           {metrics?.density?.toFixed(1) || '0.0'} ppm²
@@ -504,6 +511,13 @@ export default function OperatorConsole() {
                 monitor={monitors[idx]}
                 isActive={activeZoneId === zone.id}
                 onClick={() => setActiveZoneId(zone.id)}
+                onDelete={(id) => {
+                  const remaining = zones.filter(z => z.id !== id);
+                  setZones(remaining);
+                  if (activeZoneId === id) {
+                    setActiveZoneId(remaining[0]?.id || null);
+                  }
+                }}
               />
             ))}
           </div>
